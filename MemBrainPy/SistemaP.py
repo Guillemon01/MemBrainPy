@@ -152,7 +152,7 @@ def simular_lapso(sistema: SistemaP) -> None:
     # Actualizar el estado de cada membrana: sumar la producción acumulada a los recursos originales.
     for id_mem, prod in producciones.items():
         membrana = sistema.piel[id_mem]
-        membrana.recursos = union_multiconjuntos(membrana.recursos, prod)
+        membrana.recursos = union_multiconjuntos(recursos_disponibles, prod)
 
 
 # ------------------------------
