@@ -61,7 +61,6 @@ def sistema_aniado(recursos: dict = None, num_membranas: int = None, anidacion_m
     # Opcional: regla de disolución de una de las hijas del top-level
     if top_mem.hijos:
         dis_id = random.choice(top_mem.hijos)
-        # Se requiere consumir al menos un recurso para activar
         top_mem.agregar_regla(Regla({"b": 1}, {}, prioridad=1, disuelve_membranas=[dis_id]))
 
     return sistema
@@ -85,7 +84,7 @@ def sistema_con_conflictos(recursos: dict = None) -> SistemaP:
     # Opcional: regla de creación de membrana nueva
     if random.random() < 0.5:
         new_id = f"m_new_{random.randint(2, 10)}"
-        m1.agregar_regla(Regla({"x": 1}, {}, prioridade=1, crea_membranas=[new_id]))
+        m1.agregar_regla(Regla({"x": 1}, {}, prioridad=1, crea_membranas=[new_id]))
     sistema.agregar_membrana(m1)
     return sistema
 
@@ -106,26 +105,26 @@ def Sistema_complejo(recursos: dict = None, tipo: str = None, complejidad: int =
     m1 = Membrana("m1", recursos.copy())
     sistema.agregar_membrana(m1)
 
-    # Crear una membrana hija m2 (vacía o con recurso r)
+    # Crear una membrana hija m2
     m2 = Membrana("m2", {"dummy": 0})
     sistema.agregar_membrana(m2, parent_id="m1")
 
-    # Elegir tipo de regla forzada
-    tipo_sel = tipo if tipo in ("crea", "disuelve") else random.choice(["crea", "disuelve"])
-    if tipo_sel == "crea":
-        new_id = "m_forzada"
-        # Regla consumidora de 'a' que crea m_forzada
-        m1.agregar_regla(Regla({"a": 1}, {}, prioridad=1, crea_membranas=[new_id]))
-    else:
-        # Regla consumidora de 'r' que disuelve m2
-        m1.agregar_regla(Regla({"r": 1}, {}, prioridad=1, disuelve_membranas=["m2"]))
-
     # Añadir reglas adicionales para complejidad
-    num_extra = complejidad if (isinstance(complejidad, int) and complejidad > 0) else random.randint(1, 5)
+    num_extra = complejidad if isinstance(complejidad, int) and complejidad > 0 else random.randint(1, 5)
     for i in range(num_extra):
         consume = {"a": random.randint(1, 2)}
         produce = {"x": random.randint(1, 3)}
         prio = random.randint(1, 3)
         m1.agregar_regla(Regla(consume, produce, prioridad=prio))
+
+    # Elegir tipo de regla forzada y asignar prioridad superior
+    tipo_sel = tipo if tipo in ("crea", "disuelve") else random.choice(["crea", "disuelve"])
+    existing_prios = [reg.prioridad for reg in m1.reglas]
+    forced_prio = max(existing_prios, default=0) + 1
+    if tipo_sel == "crea":
+        new_id = "m_forzada"
+        m1.agregar_regla(Regla({"a": 1}, {}, prioridad=forced_prio, crea_membranas=[new_id]))
+    else:
+        m1.agregar_regla(Regla({"r": 1}, {}, prioridad=forced_prio, disuelve_membranas=["m2"]))
 
     return sistema

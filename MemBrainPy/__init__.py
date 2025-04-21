@@ -7,4 +7,6 @@ sistema = tests.Sistema_complejo()
 
 # Simular visualmente durante 5 pasos
 #visualizar_sistema(sistema, pasos=5, delay=1.5)
+
 simular_y_visualizar_grafico(sistema, pasos = 999, delay = 2)
+#visualizar_sistema(sistema, pasos=999, delay=2)
