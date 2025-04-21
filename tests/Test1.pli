@@ -1,0 +1,39 @@
+@model<membrane_division>
+
+def main() {
+    /* Estructura de membranas:
+       - Membrana 1 (piel) contiene las membranas 2 y 3
+       - Membrana 2 contiene la membrana 4
+       - Membrana 3 contiene la membrana 5 */
+    @mu = [[[]'4]'2[[]'5]'3]'1;
+
+    /* Multiconjuntos iniciales */
+    @ms(1) = a*2, b;
+    @ms(2) = c, d*2;
+    @ms(3) = e*3;
+    @ms(4) = f;
+    @ms(5) = g*2, h;
+
+    /* Reglas de evolución */
+    /* - Reescritura en membrana 1 */
+    [a --> b] '1;
+
+    /* - Regla cooperativa en membrana 2 */
+    [b c --> d] '2;
+    /* - División en membrana 2 */
+    [c --> c c] '2;
+
+    /* - Comunicación: e sale de 3 al exterior (piel) */
+    [e --> e (out)] '3;
+    /* - Comunicación: d va de 2 a 4 */
+    [d --> d (in 4)] '2;
+
+    /* - División en membrana 3 */
+    [e --> e e] '3;
+
+    /* - Reescritura en membrana 4 */
+    [f --> f g] '4;
+
+    /* - Reescritura cooperativa en membrana 5 */
+    [g h --> i] '5;
+}

@@ -1,12 +1,12 @@
 from visualizadorBasico import visualizar_sistema
 from visualizadorAvanzado import simular_y_visualizar_grafico
 import tests_sistemas as tests
+import Lector
 
-# Elegir uno de los sistemas de prueba
-sistema = tests.Sistema_complejo()
 
-# Simular visualmente durante 5 pasos
-#visualizar_sistema(sistema, pasos=5, delay=1.5)
+sistema = Lector.leerSistema("tests/Test1.pli")
+#sistema = tests.Sistema_complejo()
 
-simular_y_visualizar_grafico(sistema, pasos = 999, delay = 2)
+
+simular_y_visualizar_grafico(sistema, pasos = 0, delay = 2)
 #visualizar_sistema(sistema, pasos=999, delay=2)
