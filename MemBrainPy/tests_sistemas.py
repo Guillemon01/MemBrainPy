@@ -128,3 +128,32 @@ def Sistema_complejo(recursos: dict = None, tipo: str = None, complejidad: int =
         m1.agregar_regla(Regla({"r": 1}, {}, prioridad=forced_prio, disuelve_membranas=["m2"]))
 
     return sistema
+
+def sistema_test_comparativo() -> SistemaP:
+    """
+    Genera un sistema P que muestra una clara diferencia de comportamiento
+    entre los modos 'paralelo' y 'secuencial'.
+
+    Configuración del sistema:
+      - Recursos iniciales: {'a': 3, 'b': 1}
+      - Regla pri=2: consume {'a':2, 'b':1} y produce {'c':1}
+      - Regla pri=1: consume {'a':1} y produce {'b':2}
+
+    Uso:
+      sistema = sistema_test_comparativo()
+      simular_lapso(sistema, modo='paralelo')
+      # se espera recursos finales {'c':1, 'b':2}
+
+      sistema = sistema_test_comparativo()
+      simular_lapso(sistema, modo='secuencial')
+      # se espera recursos finales {'c':1, 'b':4}
+    """
+    sistema = SistemaP()
+    # Membrana única con recursos determinísticos
+    m1 = Membrana('m1', {'a': 3, 'b': 1})
+    # Regla de mayor prioridad: consume a y b -> genera c
+    m1.agregar_regla(Regla({'a': 2, 'b': 1}, {'c': 1}, prioridad=2))
+    # Regla de prioridad menor: consume a -> genera b
+    m1.agregar_regla(Regla({'a': 1}, {'b': 2}, prioridad=1))
+    sistema.agregar_membrana(m1)
+    return sistema

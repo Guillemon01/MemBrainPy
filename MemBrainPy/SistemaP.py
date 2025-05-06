@@ -14,8 +14,15 @@ def resta_multiconjuntos(ms: Dict[str, int], ms_resta: Dict[str, int]) -> Dict[s
     for simbolo, cantidad in ms_resta.items():
         resultado[simbolo] = resultado.get(simbolo, 0) - cantidad
     # Eliminar símbolos con cantidad <= 0 para reflejar correctamente el consumo
-    resultado = {s: c for s, c in resultado.items() if c > 0}
-    return resultado
+    return {s: c for s, c in resultado.items() if c > 0}
+
+# Calcula cuántas veces se puede aplicar completamente una regla a unos recursos dados
+def veces_aplicable(recursos: Dict[str, int], regla: 'Regla') -> int:
+    max_veces = float('inf')
+    for simbolo, cantidad in regla.izquierda.items():
+        disponibles = recursos.get(simbolo, 0)
+        max_veces = min(max_veces, disponibles // cantidad)
+    return max_veces if max_veces != float('inf') else 0
 
 # Clase que representa una regla del sistema P
 class Regla:
@@ -81,26 +88,60 @@ class SistemaP:
     def __repr__(self):
         return f"SistemaP({self.piel})"
 
+
 def regla_aplicable(recursos: Dict[str, int], regla: Regla) -> bool:
     for simbolo, cantidad in regla.izquierda.items():
         if recursos.get(simbolo, 0) < cantidad:
             return False
     return True
 
+
 def resolver_conflicto(membrana: Membrana, reglas: List[Regla]) -> List[Regla]:
     reglas_ordenadas = sorted(reglas, key=lambda r: r.total_consumo(), reverse=True)
     return reglas_ordenadas[:1]
 
-def simular_lapso(sistema: SistemaP) -> None:
-    # Acumuladores
+
+def simular_lapso(sistema: SistemaP, modo: str = "paralelo") -> None:
+    """
+    Simula un lapso del sistema P.
+
+    modo: 'paralelo' (default) o 'secuencial'.
+      - paralelo: evalúa todas las reglas simultáneamente (priorizando por consumo).
+      - secuencial: para cada membrana, elige la regla de mayor prioridad y la ejecuta tantas veces como sea posible de golpe.
+    """
     producciones: Dict[str, Dict[str, int]] = {mid: {} for mid in sistema.piel}
     consumos: Dict[str, Dict[str, int]] = {}
     to_create: List[Tuple[str, str]] = []
     to_dissolve: List[str] = []
 
-    # 1) Aplicación de reglas
     for membrana in list(sistema.piel.values()):
         recursos_disp = deepcopy(membrana.recursos)
+
+        if modo == "secuencial":
+            # Seleccionar la regla de mayor prioridad
+            aplicables = [r for r in membrana.reglas if regla_aplicable(recursos_disp, r)]
+            if aplicables:
+                max_prio = max(r.prioridad for r in aplicables)
+                candidatos = [r for r in aplicables if r.prioridad == max_prio]
+                regla = resolver_conflicto(membrana, candidatos)[0]
+                # Calcular cuántas veces se puede aplicar
+                veces = veces_aplicable(recursos_disp, regla)
+                if veces > 0:
+                    # Consumir y producir de golpe
+                    for simbolo, cantidad in regla.izquierda.items():
+                        recursos_disp[simbolo] = recursos_disp.get(simbolo, 0) - cantidad * veces
+                    for simbolo, cantidad in regla.derecha.items():
+                        producciones[membrana.id][simbolo] = producciones[membrana.id].get(simbolo, 0) + cantidad * veces
+                    # Operaciones de membrana repetidas veces
+                    for _ in range(veces):
+                        for new_id in regla.crea_membranas:
+                            to_create.append((membrana.id, new_id))
+                        for dis_id in regla.disuelve_membranas:
+                            to_dissolve.append(dis_id)
+            consumos[membrana.id] = {s: c for s, c in recursos_disp.items() if c > 0}
+            continue
+
+        # Modo paralelo (comportamiento original)
         reglas_por_prio: Dict[int, List[Regla]] = {}
         for regla in membrana.reglas:
             if regla_aplicable(recursos_disp, regla):
@@ -111,15 +152,12 @@ def simular_lapso(sistema: SistemaP) -> None:
             for regla in seleccionadas:
                 if regla_aplicable(recursos_disp, regla):
                     recursos_disp = resta_multiconjuntos(recursos_disp, regla.izquierda)
-                    # Recursos producidos
                     for s, c in regla.derecha.items():
                         producciones[membrana.id][s] = producciones[membrana.id].get(s, 0) + c
-                    # Operaciones de membrana
                     for new_id in regla.crea_membranas:
                         to_create.append((membrana.id, new_id))
                     for dis_id in regla.disuelve_membranas:
                         to_dissolve.append(dis_id)
-        # Guardar recursos restantes tras consumo
         consumos[membrana.id] = recursos_disp
 
     # 2) Actualizar recursos en cada membrana

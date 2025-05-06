@@ -95,7 +95,7 @@ def visualizar_sistema_grafico(sistema: SistemaP):
     plt.show()
 
 
-def simular_y_visualizar_grafico(sistema: SistemaP, pasos: int = 5, delay: float = 1.0):
+def simular_y_visualizar_grafico(sistema: SistemaP, pasos: int = 5, delay: float = 1.0, modo: str = "paralelo"):
     """
     Simula la evolución del sistema P y actualiza la visualización gráfica en cada lapso,
     incluyendo un retardo inicial antes del primer paso.
@@ -131,7 +131,7 @@ def simular_y_visualizar_grafico(sistema: SistemaP, pasos: int = 5, delay: float
         ax.set_title(f"Paso {paso}")
 
         # Ejecutar un lapso de evolución
-        simular_lapso(sistema)
+        simular_lapso(sistema, modo=modo)
 
         # Dibujar estado tras el lapso
         top_membranas = obtener_membranas_top(sistema)
