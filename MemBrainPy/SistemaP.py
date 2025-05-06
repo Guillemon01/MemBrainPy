@@ -13,6 +13,8 @@ def resta_multiconjuntos(ms: Dict[str, int], ms_resta: Dict[str, int]) -> Dict[s
     resultado = ms.copy()
     for simbolo, cantidad in ms_resta.items():
         resultado[simbolo] = resultado.get(simbolo, 0) - cantidad
+    # Eliminar símbolos con cantidad <= 0 para reflejar correctamente el consumo
+    resultado = {s: c for s, c in resultado.items() if c > 0}
     return resultado
 
 # Clase que representa una regla del sistema P
@@ -22,14 +24,14 @@ class Regla:
         izquierda: Dict[str, int],
         derecha: Dict[str, int],
         prioridad: int,
-        crea_membranas: Optional[List[str]] = None,       # añadido
-        disuelve_membranas: Optional[List[str]] = None    # añadido
+        crea_membranas: Optional[List[str]] = None,
+        disuelve_membranas: Optional[List[str]] = None
     ):
         self.izquierda = izquierda
         self.derecha = derecha
         self.prioridad = prioridad
-        self.crea_membranas = crea_membranas or []         # añadido
-        self.disuelve_membranas = disuelve_membranas or [] # añadido
+        self.crea_membranas = crea_membranas or []
+        self.disuelve_membranas = disuelve_membranas or []
 
     def total_consumo(self) -> int:
         return sum(self.izquierda.values())
@@ -38,8 +40,10 @@ class Regla:
         return sum(self.derecha.values())
 
     def __repr__(self):
-        return (f"Regla(izq={self.izquierda}, der={self.derecha}, pri={self.prioridad}, "
-                f"crea={self.crea_membranas}, disuelve={self.disuelve_membranas})")
+        return (
+            f"Regla(izq={self.izquierda}, der={self.derecha}, pri={self.prioridad}, "
+            f"crea={self.crea_membranas}, disuelve={self.disuelve_membranas})"
+        )
 
 # Clase que representa una membrana
 class Membrana:
@@ -48,14 +52,16 @@ class Membrana:
         self.recursos = recursos
         self.reglas: List[Regla] = []
         self.hijos: List[str] = []
-        self.padre: Optional[str] = None                   # añadido
+        self.padre: Optional[str] = None
 
     def agregar_regla(self, regla: Regla):
         self.reglas.append(regla)
 
     def __repr__(self):
-        return (f"Membrana(id={self.id}, padre={self.padre}, recursos={self.recursos}, "
-                f"hijos={self.hijos})")
+        return (
+            f"Membrana(id={self.id}, padre={self.padre}, recursos={self.recursos}, "
+            f"hijos={self.hijos})"
+        )
 
 # Clase que agrupa todas las membranas
 class SistemaP:
@@ -63,13 +69,13 @@ class SistemaP:
         self.piel: Dict[str, Membrana] = {}
 
     def agregar_membrana(self, membrana: Membrana, parent_id: Optional[str] = None):
-        membrana.padre = parent_id                          # añadido
+        membrana.padre = parent_id
         self.piel[membrana.id] = membrana
         if parent_id:
             padre = self.piel[parent_id]
-            padre.hijos.append(membrana.id)                # añadido
+            padre.hijos.append(membrana.id)
 
-    def obtener_membrana(self, id_mem: str) -> Membrana:
+    def obtener_membrana(self, id_mem: str) -> Optional[Membrana]:
         return self.piel.get(id_mem)
 
     def __repr__(self):
@@ -88,8 +94,9 @@ def resolver_conflicto(membrana: Membrana, reglas: List[Regla]) -> List[Regla]:
 def simular_lapso(sistema: SistemaP) -> None:
     # Acumuladores
     producciones: Dict[str, Dict[str, int]] = {mid: {} for mid in sistema.piel}
-    to_create: List[Tuple[str, str]] = []      # (parent_id, new_id)
-    to_dissolve: List[str] = []                # IDs de membranas a disolver
+    consumos: Dict[str, Dict[str, int]] = {}
+    to_create: List[Tuple[str, str]] = []
+    to_dissolve: List[str] = []
 
     # 1) Aplicación de reglas
     for membrana in list(sistema.piel.values()):
@@ -112,11 +119,14 @@ def simular_lapso(sistema: SistemaP) -> None:
                         to_create.append((membrana.id, new_id))
                     for dis_id in regla.disuelve_membranas:
                         to_dissolve.append(dis_id)
+        # Guardar recursos restantes tras consumo
+        consumos[membrana.id] = recursos_disp
 
     # 2) Actualizar recursos en cada membrana
     for mid, prod in producciones.items():
         mem = sistema.piel[mid]
-        mem.recursos = union_multiconjuntos(mem.recursos, prod)
+        base = consumos.get(mid, mem.recursos)
+        mem.recursos = union_multiconjuntos(base, prod)
 
     # 3) Procesar disoluciones
     for dis_id in to_dissolve:
@@ -125,22 +135,19 @@ def simular_lapso(sistema: SistemaP) -> None:
         mem = sistema.piel[dis_id]
         parent_id = mem.padre
         if parent_id is None:
-            continue  # no disolver la piel
+            continue
         padre = sistema.piel[parent_id]
-        # Transferir recursos
         padre.recursos = union_multiconjuntos(padre.recursos, mem.recursos)
-        # Reparentar hijos
         for child_id in mem.hijos:
             child = sistema.piel[child_id]
             child.padre = parent_id
             padre.hijos.append(child_id)
-        # Eliminar la membrana
         padre.hijos.remove(dis_id)
         del sistema.piel[dis_id]
 
     # 4) Procesar creaciones
     for parent_id, new_id in to_create:
         if new_id in sistema.piel:
-            continue  # ya existe
-        nueva = Membrana(new_id, {})                 # vacía al crearse
+            continue
+        nueva = Membrana(new_id, {})
         sistema.agregar_membrana(nueva, parent_id)
