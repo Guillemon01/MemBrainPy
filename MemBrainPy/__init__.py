@@ -6,7 +6,7 @@ import Lector
 
 
 #sistema = Lector.leerSistema("tests/Test1.pli")
-sistema = tests.direccionamiento()
+sistema = tests.actividad2(1,1)
 
 
 simular_y_visualizar(sistema, pasos = 30, modo="max_paralelo")

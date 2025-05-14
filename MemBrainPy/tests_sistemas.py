@@ -193,3 +193,57 @@ def direccionamiento() -> SistemaP:
     return sistema
 
 
+def actividad1() -> SistemaP:
+    """
+    Actividad 1:
+      Estructura:
+        m1 (id="m1") ──> m2 (id="m2")
+      w1 = a^2, w2 = {}
+      i0 = "m2"
+      Reglas en m1:
+        r1 (Pri=2): a -> a + b_in_m2 + 2·c_in_m2
+        r2 (Pri=1): a^2 -> 2·a_out
+    """
+    sistema = SistemaP()
+    sistema.membrana_salida = "m2"
+    m1 = Membrana("m1", {"a": 2})
+    m2 = Membrana("m2", {})
+    sistema.agregar_membrana(m1)
+    sistema.agregar_membrana(m2, parent_id="m1")
+    m1.agregar_regla(Regla({"a": 1}, {"a": 1, "b_in_m2": 1, "c_in_m2": 2}, prioridad=1))
+    m1.agregar_regla(Regla( {"a": 2},{"a_out": 2}, prioridad=1))
+    return sistema
+
+
+def actividad2(n: int, k: int) -> SistemaP:
+    """
+    Actividad 2:
+      Estructura:
+        m1 (id="m1") ──> m2 (id="m2")
+                       └─> m3 (id="m3")
+      w1 = {}, w2 = a^n c^k d^1, w3 = {}
+      i0 = "m3"
+      Reglas en m1:
+        r4 (Pri=2): d c e -> n_in_m3
+        r5 (Pri=1): d     -> s_in_m3
+      Reglas en m2:
+        r1 (Pri=2): a c   -> e
+        r2 (Pri=2): a e   -> c
+        r3 (Pri=1): d     -> d + δ (disuelve m2)
+    """
+    sistema = SistemaP()
+    sistema.membrana_salida = "m3"
+    m1 = Membrana("m1", {})
+    m2 = Membrana("m2", {"a": n, "c": k, "d": 1})
+    m3 = Membrana("m3", {})
+    sistema.agregar_membrana(m1)
+    sistema.agregar_membrana(m2, parent_id="m1")
+    sistema.agregar_membrana(m3, parent_id="m1")
+    m1.agregar_regla(Regla({"d": 1, "c": 1, "e": 1},{"n_in_m3": 1},prioridad=2))
+    m1.agregar_regla(Regla({"d": 1},{"s_in_m3": 1},prioridad=1))
+
+    # Reglas en m2
+    m2.agregar_regla(Regla({"a": 1, "c": 1},{"e": 1},prioridad=2))
+    m2.agregar_regla(Regla({"a": 1, "e": 1},{"c": 1},prioridad=2))
+    m2.agregar_regla(Regla({"d": 1},{"d": 1},prioridad=1,disuelve_membranas=["m2"]))
+    return sistema

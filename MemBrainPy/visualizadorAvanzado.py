@@ -8,13 +8,17 @@ from SistemaP import SistemaP, Membrana, Regla, simular_lapso, generar_maximales
 
 def dibujar_membrana(ax, membrana: Membrana, sistema: SistemaP, x: float, y: float, width: float, height: float):
     """Dibuja la membrana con sus recursos y, recursivamente, a sus hijas."""
-    rect = Rectangle((x, y), width, height, fill=False, edgecolor='black', linewidth=2)
+    # Color especial si es la membrana de salida
+    color_borde = 'blue' if sistema.membrana_salida == membrana.id else 'black'
+    rect = Rectangle((x, y), width, height, fill=False, edgecolor=color_borde, linewidth=2)
     ax.add_patch(rect)
+
     recursos_text = ''.join(simbolo * cantidad + ' ' 
                            for simbolo, cantidad in membrana.recursos.items())
     ax.text(x + 0.02*width, y + 0.9*height, f"{membrana.id}\n{recursos_text}",
             fontsize=10, verticalalignment='top',
             bbox=dict(facecolor='white', alpha=0.3, boxstyle='round'))
+
     if membrana.hijos:
         n = len(membrana.hijos)
         top_margin = 0.3 * height

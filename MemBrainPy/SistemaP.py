@@ -42,8 +42,9 @@ class Membrana:
         return f"Membrana(id={self.id}, rec={self.recursos}, hijos={self.hijos})"
 
 class SistemaP:
-    def __init__(self):
+    def __init__(self,membrana_salida: Optional[str] = None):
         self.piel: Dict[str, Membrana] = {}
+        self.membrana_salida = membrana_salida
 
     def agregar_membrana(self, membrana: Membrana, parent_id: Optional[str] = None):
         membrana.padre = parent_id
