@@ -4,34 +4,6 @@ from itertools import product
 import random
 
 
-# Funciones de apoyo para multisets
-
-def union_multiconjuntos(ms1: Dict[str, int], ms2: Dict[str, int]) -> Dict[str, int]:
-    resultado = ms1.copy()
-    for simbolo, cantidad in ms2.items():
-        resultado[simbolo] = resultado.get(simbolo, 0) + cantidad
-    return resultado
-
-def resta_multiconjuntos(ms: Dict[str, int], ms_resta: Dict[str, int]) -> Dict[str, int]:
-    resultado = ms.copy()
-    for simbolo, cantidad in ms_resta.items():
-        resultado[simbolo] = resultado.get(simbolo, 0) - cantidad
-    # Eliminar símbolos con cantidad <= 0 para reflejar correctamente el consumo
-    return {s: c for s, c in resultado.items() if c > 0}
-
-# Calcula cuántas veces se puede aplicar completamente una regla a unos recursos dados
-def veces_aplicable(recursos: Dict[str, int], regla: 'Regla') -> int:
-    max_veces = float('inf')
-    for simbolo, cantidad in regla.izquierda.items():
-        disponibles = recursos.get(simbolo, 0)
-        max_veces = min(max_veces, disponibles // cantidad)
-    return max_veces if max_veces != float('inf') else 0
-
-from typing import List, Tuple, Dict
-
-def multiplicar_multiconjunto(ms: Dict[str, int], veces: int) -> Dict[str, int]:
-    """Devuelve el multiconjunto ms multiplicado por un escalar ‘veces’."""
-    return {s: c * veces for s, c in ms.items()}
 # Clase que representa una regla del sistema P
 class Regla:
     def __init__(
@@ -59,44 +31,6 @@ class Regla:
             f"Regla(izq={self.izquierda}, der={self.derecha}, pri={self.prioridad}, "
             f"crea={self.crea_membranas}, disuelve={self.disuelve_membranas})"
         )
-
-def generar_maximales(reglas: List[Regla],
-                      recursos: Dict[str, int]
-                      ) -> List[List[Tuple[Regla, int]]]:
-    """
-    Genera todas las combinaciones (listas de pares (regla, veces)) tales que:
-      1) Consumen <= recursos.
-      2) Son maximal: al conjunto resultante NO se le puede añadir una aplicación extra
-         de ninguna regla (incluso las de índice menor).
-    """
-
-    maximales: List[List[Tuple[Regla, int]]] = []
-
-    def backtrack(start: int,
-                  recursos_disp: Dict[str, int],
-                  seleccion: List[Tuple[Regla, int]]):
-        # Para cada regla a partir de `start` intentamos distintos counts
-        for i in range(start, len(reglas)):
-            regla = reglas[i]
-            max_v = veces_aplicable(recursos_disp, regla)
-            for v in range(1, max_v + 1):
-                # Probar aplicar `v` veces esta regla
-                consumido = multiplicar_multiconjunto(regla.izquierda, v)
-                nuevos_rec = resta_multiconjuntos(recursos_disp, consumido)
-                seleccion.append((regla, v))
-                backtrack(i + 1, nuevos_rec, seleccion)
-                seleccion.pop()
-
-        # Cuando no quedan más decisiones en [start..], comprobamos maximalidad global
-        # Sólo guardamos si NINGUNA regla (en toda la lista `reglas`) cabe aplicarse 1 vez
-        if all(veces_aplicable(recursos_disp, r) == 0 for r in reglas):
-            maximales.append(seleccion.copy())
-
-    backtrack(0, recursos, [])
-    return maximales
-
-
-
 
 # Clase que representa una membrana
 class Membrana:
@@ -133,6 +67,74 @@ class SistemaP:
 
     def __repr__(self):
         return f"SistemaP({self.piel})"
+    
+    
+def generar_maximales(reglas: List[Regla],
+                      recursos: Dict[str, int]
+                      ) -> List[List[Tuple[Regla, int]]]:
+    """
+    Genera todas las combinaciones (listas de pares (regla, veces)) tales que:
+      1) Consumen <= recursos.
+      2) Son maximal: al conjunto resultante NO se le puede añadir una aplicación extra
+         de ninguna regla (incluso las de índice menor).
+    """
+
+    maximales: List[List[Tuple[Regla, int]]] = []
+
+    def backtrack(start: int,
+                  recursos_disp: Dict[str, int],
+                  seleccion: List[Tuple[Regla, int]]):
+        # Para cada regla a partir de `start` intentamos distintos counts
+        for i in range(start, len(reglas)):
+            regla = reglas[i]
+            max_v = veces_aplicable(recursos_disp, regla)
+            for v in range(1, max_v + 1):
+                # Probar aplicar `v` veces esta regla
+                consumido = multiplicar_multiconjunto(regla.izquierda, v)
+                nuevos_rec = resta_multiconjuntos(recursos_disp, consumido)
+                seleccion.append((regla, v))
+                backtrack(i + 1, nuevos_rec, seleccion)
+                seleccion.pop()
+
+        # Cuando no quedan más decisiones en [start..], comprobamos maximalidad global
+        # Sólo guardamos si NINGUNA regla (en toda la lista `reglas`) cabe aplicarse 1 vez
+        if all(veces_aplicable(recursos_disp, r) == 0 for r in reglas):
+            maximales.append(seleccion.copy())
+
+    backtrack(0, recursos, [])
+    return maximales
+
+# Funciones de apoyo para multisets
+
+def union_multiconjuntos(ms1: Dict[str, int], ms2: Dict[str, int]) -> Dict[str, int]:
+    resultado = ms1.copy()
+    for simbolo, cantidad in ms2.items():
+        resultado[simbolo] = resultado.get(simbolo, 0) + cantidad
+    return resultado
+
+def resta_multiconjuntos(ms: Dict[str, int], ms_resta: Dict[str, int]) -> Dict[str, int]:
+    resultado = ms.copy()
+    for simbolo, cantidad in ms_resta.items():
+        resultado[simbolo] = resultado.get(simbolo, 0) - cantidad
+    # Eliminar símbolos con cantidad <= 0 para reflejar correctamente el consumo
+    return {s: c for s, c in resultado.items() if c > 0}
+
+# Calcula cuántas veces se puede aplicar completamente una regla a unos recursos dados
+def veces_aplicable(recursos: Dict[str, int], regla: 'Regla') -> int:
+    max_veces = float('inf')
+    for simbolo, cantidad in regla.izquierda.items():
+        disponibles = recursos.get(simbolo, 0)
+        max_veces = min(max_veces, disponibles // cantidad)
+    return max_veces if max_veces != float('inf') else 0
+
+from typing import List, Tuple, Dict
+
+def multiplicar_multiconjunto(ms: Dict[str, int], veces: int) -> Dict[str, int]:
+    """Devuelve el multiconjunto ms multiplicado por un escalar ‘veces’."""
+    return {s: c * veces for s, c in ms.items()}
+
+
+
 
 
 def regla_aplicable(recursos: Dict[str, int], regla: Regla) -> bool:
