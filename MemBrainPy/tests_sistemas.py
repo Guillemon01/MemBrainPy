@@ -170,3 +170,4 @@ def sistema_test_comparativo() -> SistemaP:
     m1.agregar_regla(Regla({'a': 1}, {'b': 2}, prioridad=1))
     sistema.agregar_membrana(m1)
     return sistema
+
