@@ -171,3 +171,25 @@ def sistema_test_comparativo() -> SistemaP:
     sistema.agregar_membrana(m1)
     return sistema
 
+def direccionamiento() -> SistemaP:
+    """
+    Demuestra reglas con direccionamiento:
+      - Membrana m1 con 3 'x'.
+      - Regla Pri=2: consume 2 'x' -> produce 1 'y_out' (envía y al padre).
+      - Regla Pri=2: consume 1 'x' -> produce 1 'z_in_m2' (envía z a m2).
+      - Membrana m2 (hija de m1) vacía.
+    En max_paralelo:
+      * m1 consumirá 2x+1x y enviará 1 y al padre (si existe) y 1 z a m2.
+    """
+    sistema = SistemaP()
+    # Membrana raíz
+    m1 = Membrana('m1', {'x': 3})
+    m1.agregar_regla(Regla({'x': 2}, {'y_out': 1}, prioridad=2))
+    m1.agregar_regla(Regla({'x': 1}, {'z_in_m2': 1}, prioridad=2))
+    sistema.agregar_membrana(m1)
+    # Membrana hija m2
+    m2 = Membrana('m2', {})
+    sistema.agregar_membrana(m2, parent_id='m1')
+    return sistema
+
+

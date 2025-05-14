@@ -6,7 +6,7 @@ import Lector
 
 
 #sistema = Lector.leerSistema("tests/Test1.pli")
-sistema = funciones.paridad(3)
+sistema = tests.direccionamiento()
 
 
 simular_y_visualizar(sistema, pasos = 30, modo="max_paralelo")
