@@ -5,7 +5,6 @@ from SistemaP import SistemaP, Membrana, Regla
 def sistema_basico(recursos: dict = None, num_reglas: int = None) -> SistemaP:
     """
     Crea un sistema P muy simple con una única membrana y reglas sencillas.
-    Ahora también puede generar reglas que crean membranas.
     """
     sistema = SistemaP()
     if recursos is None:
@@ -85,6 +84,20 @@ def sistema_con_conflictos(recursos: dict = None) -> SistemaP:
     if random.random() < 0.5:
         new_id = f"m_new_{random.randint(2, 10)}"
         m1.agregar_regla(Regla({"x": 1}, {}, prioridad=1, crea_membranas=[new_id]))
+    sistema.agregar_membrana(m1)
+    return sistema
+
+def sistema_demo_max_paralelo() -> SistemaP:
+    sistema = SistemaP()
+    # Configuración determinística para asegurar múltiples maximales
+    recursos = {'a': 3, 'b': 1}
+    m1 = Membrana('m1', recursos)
+    # Maximales posibles:
+    #  - Ejecutar R1 una vez (consume 2a+1b)
+    #  - Ejecutar R2 tres veces (consume 3a)
+    #  - Ejecutar R2 una vez y luego R1 una vez (consume 3a+1b)
+    m1.agregar_regla(Regla({'a': 2, 'b': 1}, {'c': 1}, prioridad=2))
+    m1.agregar_regla(Regla({'a': 1}, {'d': 2}, prioridad=2))
     sistema.agregar_membrana(m1)
     return sistema
 

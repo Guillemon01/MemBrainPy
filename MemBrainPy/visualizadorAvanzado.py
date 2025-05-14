@@ -1,150 +1,123 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from SistemaP import SistemaP, Membrana, Regla, simular_lapso
+from copy import deepcopy
+import random
 
+from SistemaP import SistemaP, Membrana, Regla, simular_lapso, generar_maximales, veces_aplicable
 
 def dibujar_membrana(ax, membrana: Membrana, sistema: SistemaP, x: float, y: float, width: float, height: float):
-    """
-    Dibuja una membrana como un rectángulo en el eje 'ax' usando la posición (x, y) con el ancho y alto dados.
-
-    Dentro del rectángulo se muestra:
-      - El identificador (id) de la membrana.
-      - Los recursos: se repite cada símbolo tantas veces como indique su cantidad.
-      - Si la membrana tiene hijas, se dibujan de forma anidada dentro del rectángulo (disposición vertical).
-    """
+    """Dibuja la membrana con sus recursos y, recursivamente, a sus hijas."""
     rect = Rectangle((x, y), width, height, fill=False, edgecolor='black', linewidth=2)
     ax.add_patch(rect)
-    recursos_text = ""
-    for simbolo, cantidad in membrana.recursos.items():
-        recursos_text += simbolo * cantidad + " "
-    ax.text(
-        x + 0.02 * width,
-        y + height - 0.1 * height,
-        f"{membrana.id}\n{recursos_text}",
-        fontsize=10,
-        verticalalignment='top',
-        bbox=dict(facecolor='w', alpha=0.3, boxstyle="round")
-    )
-    if membrana.hijos:
-        n_hijos = len(membrana.hijos)
-        margen_superior = 0.3 * height
-        area_hijas_y = y
-        area_hijas_height = height - margen_superior - 0.05 * height
-        child_height = area_hijas_height / n_hijos
-        child_width = width * 0.9
-        child_x = x + 0.05 * width
-        for i, hijo_id in enumerate(membrana.hijos):
-            hijo = sistema.piel.get(hijo_id)
-            if hijo:
-                child_y = area_hijas_y + i * child_height
-                dibujar_membrana(ax, hijo, sistema, child_x, child_y, child_width, child_height)
 
+    recursos_text = ''.join(simbolo * cantidad + ' ' 
+                           for simbolo, cantidad in membrana.recursos.items())
+    ax.text(x + 0.02*width, y + 0.9*height, f"{membrana.id}\n{recursos_text}",
+            fontsize=10, verticalalignment='top',
+            bbox=dict(facecolor='white', alpha=0.3, boxstyle='round'))
+
+    if membrana.hijos:
+        n = len(membrana.hijos)
+        top_margin = 0.3 * height
+        area_h = height - top_margin - 0.05*height
+        child_h = area_h / n
+        child_w = 0.9 * width
+        child_x = x + 0.05 * width
+        for i, hid in enumerate(membrana.hijos):
+            h = sistema.piel[hid]
+            dibujar_membrana(ax, h, sistema,
+                             child_x,
+                             y + i*child_h,
+                             child_w,
+                             child_h)
 
 def dibujar_reglas(ax, sistema: SistemaP):
-    """
-    Dibuja todas las reglas de todas las membranas en la esquina superior derecha de la figura.
-    Incluye información de creación y disolución de membranas.
-    """
-    reglas_text = "Reglas:\n"
-    for id_mem, membrana in sistema.piel.items():
-        for regla in membrana.reglas:
-            consume = ", ".join([f"{k}:{v}" for k, v in regla.izquierda.items()]) or ""
-            produce = ", ".join([f"{k}:{v}" for k, v in regla.derecha.items()]) or ""
-            crea = f" crea={regla.crea_membranas}" if regla.crea_membranas else ""
-            disuelve = f" disuelve={regla.disuelve_membranas}" if regla.disuelve_membranas else ""
-            reglas_text += (
-                f"{membrana.id}: {consume} -> {produce}"
-                f" (Pri={regla.prioridad}){crea}{disuelve}\n"
-            )
-    ax.text(
-        0.70,
-        0.95,
-        reglas_text,
-        transform=ax.transAxes,
-        fontsize=9,
-        verticalalignment='top',
-        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5)
-    )
-
+    """Lista en la esquina superior derecha todas las reglas con su prioridad."""
+    lines = ["Reglas:"]
+    for m in sistema.piel.values():
+        for r in m.reglas:
+            cons = ",".join(f"{k}:{v}" for k,v in r.izquierda.items())
+            prod = ",".join(f"{k}:{v}" for k,v in r.derecha.items())
+            crea = f" crea={r.crea_membranas}" if r.crea_membranas else ""
+            dis = f" disuelve={r.disuelve_membranas}" if r.disuelve_membranas else ""
+            lines.append(f"{m.id}: {cons}->{prod} (Pri={r.prioridad}){crea}{dis}")
+    ax.text(0.65, 0.95, "\n".join(lines),
+            transform=ax.transAxes, fontsize=8,
+            verticalalignment='top',
+            bbox=dict(facecolor='wheat', alpha=0.5))
 
 def obtener_membranas_top(sistema: SistemaP):
-    todas_ids = set(sistema.piel.keys())
-    ids_hijos = set(hijo for mem in sistema.piel.values() for hijo in mem.hijos)
-    top_ids = todas_ids - ids_hijos
-    return [sistema.piel[id_mem] for id_mem in top_ids]
+    """Devuelve las membranas de nivel superior (las que no son hijas)."""
+    all_ids   = set(sistema.piel.keys())
+    child_ids = {h for m in sistema.piel.values() for h in m.hijos}
+    top_ids   = all_ids - child_ids
+    return [sistema.piel[i] for i in top_ids]
 
-
-def visualizar_sistema_grafico(sistema: SistemaP):
-    fig, ax = plt.subplots(figsize=(10, 8))
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 100)
-    ax.set_aspect('equal')
-    ax.axis('off')
-    top_membranas = obtener_membranas_top(sistema)
-    n_top = len(top_membranas)
-    if n_top == 0:
-        return
-    area_width = 100 / n_top
-    for i, membrana in enumerate(top_membranas):
-        x = i * area_width + 5
-        y = 50
-        width = area_width - 10
-        height = 40
-        dibujar_membrana(ax, membrana, sistema, x, y, width, height)
-    dibujar_reglas(ax, sistema)
-    plt.show()
-
-
-def simular_y_visualizar_grafico(sistema: SistemaP, pasos: int = 5, delay: float = 1.0, modo: str = "paralelo"):
+def simular_y_visualizar(sistema: SistemaP, pasos: int = 5, modo: str = 'max_paralelo'):
     """
-    Simula la evolución del sistema P y actualiza la visualización gráfica en cada lapso,
-    incluyendo un retardo inicial antes del primer paso.
+    Navega con ← y → entre hasta 'pasos' estados:
+      →: si no existe aún, genera un nuevo lapso (aleatorio).
+      ←: retrocede en el historial.
     """
-    plt.ion()
+    historial = [deepcopy(sistema)]
+    idx = 0
+
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    # Dibujo inicial (Paso 0) y retardo
-    ax.clear()
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 100)
-    ax.set_aspect('equal')
-    ax.axis('off')
-    ax.set_title("Estado Inicial")
-    top_membranas = obtener_membranas_top(sistema)
-    if top_membranas:
-        area_width = 100 / len(top_membranas)
-        for i, membrana in enumerate(top_membranas):
-            x = i * area_width + 5
-            y = 50
-            width = area_width - 10
-            height = 40
-            dibujar_membrana(ax, membrana, sistema, x, y, width, height)
-    dibujar_reglas(ax, sistema)
-    plt.pause(delay)
-
-    for paso in range(1, pasos + 1):
+    def dibujar_estado(i):
         ax.clear()
-        ax.set_xlim(0, 100)
-        ax.set_ylim(0, 100)
-        ax.set_aspect('equal')
-        ax.axis('off')
-        ax.set_title(f"Paso {paso}")
+        ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis('off')
+        ax.set_title(f"Paso {i}")
 
-        # Ejecutar un lapso de evolución
-        simular_lapso(sistema, modo=modo)
+        est = historial[i]
 
-        # Dibujar estado tras el lapso
-        top_membranas = obtener_membranas_top(sistema)
-        if top_membranas:
-            area_width = 100 / len(top_membranas)
-            for i, membrana in enumerate(top_membranas):
-                x = i * area_width + 5
-                y = 50
-                width = area_width - 10
-                height = 40
-                dibujar_membrana(ax, membrana, sistema, x, y, width, height)
-        dibujar_reglas(ax, sistema)
-        plt.pause(delay)
+        # 1) Mostrar los maximales candidatos
+        texto = "Maximales generados:"
+        for m in est.piel.values():
+            rec_disp = deepcopy(m.recursos)
+            aplic = [r for r in m.reglas if veces_aplicable(rec_disp, r) > 0]
+            if aplic:
+                prio = max(r.prioridad for r in aplic)
+                top_regs = [r for r in aplic if r.prioridad == prio]
+                maxs = generar_maximales(top_regs, rec_disp)
+                sets = []
+                for combo in maxs:
+                    elems = []
+                    for regla, v in combo:
+                        ridx = m.reglas.index(regla) + 1
+                        elems += [f"r{ridx}"] * v
+                    sets.append("{" + ",".join(elems) + "}")
+                texto += f" {m.id}: " + ",".join(sets)
+        ax.text(0.02, 0.05, texto, transform=ax.transAxes,
+                fontsize=8, verticalalignment='bottom',
+                bbox=dict(facecolor='white', alpha=0.5))
 
-    plt.ioff()
-    plt.show()
+        # 2) Dibujar membranas y reglas
+        tops = obtener_membranas_top(est)
+        n = len(tops)
+        for j, m in enumerate(tops):
+            x = j * (100/n) + 5
+            dibujar_membrana(ax, m, est, x, 50, 100/n - 10, 40)
+        dibujar_reglas(ax, est)
+        fig.canvas.draw_idle()
+
+    def on_key(event):
+        nonlocal idx
+        if event.key == 'right' and idx < pasos:
+            # Si es un paso nuevo, lo generamos de manera aleatoria
+            if idx == len(historial) - 1:
+                nuevo = deepcopy(historial[idx])
+                simular_lapso(nuevo, modo=modo)
+                historial.append(nuevo)
+            idx += 1
+            dibujar_estado(idx)
+
+        elif event.key == 'left' and idx > 0:
+            idx -= 1
+            dibujar_estado(idx)
+
+    fig.canvas.mpl_connect('key_press_event', on_key)
+
+    # Primer dibujo
+    dibujar_estado(0)
+    plt.show(block=True)
