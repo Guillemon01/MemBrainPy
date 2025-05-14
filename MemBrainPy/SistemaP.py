@@ -1,5 +1,8 @@
 from copy import deepcopy
 from typing import Dict, List, Optional, Tuple
+from itertools import product
+import random
+
 
 # Funciones de apoyo para multisets
 
@@ -23,6 +26,50 @@ def veces_aplicable(recursos: Dict[str, int], regla: 'Regla') -> int:
         disponibles = recursos.get(simbolo, 0)
         max_veces = min(max_veces, disponibles // cantidad)
     return max_veces if max_veces != float('inf') else 0
+
+from typing import List, Tuple, Dict
+
+def multiplicar_multiconjunto(ms: Dict[str, int], veces: int) -> Dict[str, int]:
+    """Devuelve el multiconjunto ms multiplicado por un escalar ‘veces’."""
+    return {s: c * veces for s, c in ms.items()}
+
+def generar_maximales(reglas: List[Regla],
+                      recursos: Dict[str, int]
+                      ) -> List[List[Tuple[Regla, int]]]:
+    """
+    Genera todas las combinaciones (listas de pares (regla, veces)) tales que:
+      - Consumen <= recursos.
+      - Son maximal: no se puede aumentar ninguna ejecución de ninguna regla.
+    """
+
+    maximales: List[List[Tuple[Regla, int]]] = []
+    
+    def backtrack(start: int,
+                  recursos_disp: Dict[str, int],
+                  seleccion: List[Tuple[Regla, int]]):
+        # Buscamos si aún hay alguna regla aplicable
+        any_aplicable = False
+        for i in range(start, len(reglas)):
+            regla = reglas[i]
+            max_v = veces_aplicable(recursos_disp, regla)
+            if max_v > 0:
+                any_aplicable = True
+                # Intentamos todas las posibilidades de 1..max_v aplicaciones de esta regla
+                for v in range(1, max_v + 1):
+                    # Restamos los recursos
+                    consumido = multiplicar_multiconjunto(regla.izquierda, v)
+                    nuevos_rec = resta_multiconjuntos(recursos_disp, consumido)
+                    seleccion.append((regla, v))
+                    backtrack(i + 1, nuevos_rec, seleccion)
+                    seleccion.pop()
+        # Si no hay ninguna regla aplicable en todo el rango [start..], es maximal
+        if not any_aplicable:
+            maximales.append(seleccion.copy())
+
+    backtrack(0, recursos, [])
+    return maximales
+
+
 
 # Clase que representa una regla del sistema P
 class Regla:
@@ -140,6 +187,32 @@ def simular_lapso(sistema: SistemaP, modo: str = "paralelo") -> None:
                             to_dissolve.append(dis_id)
             consumos[membrana.id] = {s: c for s, c in recursos_disp.items() if c > 0}
             continue
+
+        if modo == "max_paralelo":
+            aplicables = [r for r in membrana.reglas if veces_aplicable(recursos_disp, r) > 0]
+            if aplicables:
+                maximales = generar_maximales(aplicables, recursos_disp)
+                if maximales:
+                    elegido = random.choice(maximales)
+                    # Aplicar el maximal
+                    for regla, veces in elegido:
+                        # Consumir usando tus funciones auxiliares
+                        consumido = multiplicar_multiconjunto(regla.izquierda, veces)
+                        recursos_disp = resta_multiconjuntos(recursos_disp, consumido)
+                        # Producir
+                        for s, c in regla.derecha.items():
+                            producciones[membrana.id][s] = producciones[membrana.id].get(s, 0) + c * veces
+                        # Membranas a crear o disolver
+                        for _ in range(veces):
+                            for new_id in regla.crea_membranas:
+                                to_create.append((membrana.id, new_id))
+                            for dis_id in regla.disuelve_membranas:
+                                to_dissolve.append(dis_id)
+            # Guardar el estado de recursos restante
+            consumos[membrana.id] = recursos_disp.copy()
+            continue
+
+
 
         # Modo paralelo (comportamiento original)
         reglas_por_prio: Dict[int, List[Regla]] = {}
