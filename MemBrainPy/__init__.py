@@ -1,4 +1,3 @@
-from visualizadorBasico import visualizar_sistema
 from visualizadorAvanzado import simular_y_visualizar
 import tests_sistemas as tests
 import funciones

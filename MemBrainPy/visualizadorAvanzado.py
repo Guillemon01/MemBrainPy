@@ -8,7 +8,6 @@ from SistemaP import SistemaP, Membrana, Regla, simular_lapso, generar_maximales
 
 def dibujar_membrana(ax, membrana: Membrana, sistema: SistemaP, x: float, y: float, width: float, height: float):
     """Dibuja la membrana con sus recursos y, recursivamente, a sus hijas."""
-    # Color especial si es la membrana de salida
     color_borde = 'blue' if sistema.membrana_salida == membrana.id else 'black'
     rect = Rectangle((x, y), width, height, fill=False, edgecolor=color_borde, linewidth=2)
     ax.add_patch(rect)
@@ -53,7 +52,6 @@ def dibujar_reglas(fig, sistema: SistemaP):
             crea = f" crea={r.crea_membranas}" if r.crea_membranas else ""
             dis = f" disuelve={r.disuelve_membranas}" if r.disuelve_membranas else ""
             lines.append(f"{m.id}: {cons}->{prod} (Pri={r.prioridad}){crea}{dis}")
-    # Colocamos la lista de reglas fuera del área de membranas, en coordenadas de figura
     fig.text(0.78, 0.1, "Reglas:\n" + "\n".join(lines),
              fontsize=8, verticalalignment='bottom',
              bbox=dict(facecolor='wheat', alpha=0.7))
@@ -71,6 +69,10 @@ def simular_y_visualizar(sistema: SistemaP, pasos: int = 5, modo: str = 'max_par
     fig, ax = plt.subplots(figsize=(12, 8))
 
     def dibujar_estado(i):
+        # Eliminamos todos los textos previos de la figura (fig.text)
+        for t in fig.texts:
+            t.remove()
+
         ax.clear()
         ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.axis('off')
         ax.set_title(f"Paso {i}")
@@ -106,8 +108,10 @@ def simular_y_visualizar(sistema: SistemaP, pasos: int = 5, modo: str = 'max_par
             w = 0.7/n - 0.02
             h = 0.7
             dibujar_membrana(ax, m, est, x, y, w, h)
+
         # Dibujar reglas aparte
         dibujar_reglas(fig, est)
+
         fig.canvas.draw_idle()
 
     def on_key(event):
