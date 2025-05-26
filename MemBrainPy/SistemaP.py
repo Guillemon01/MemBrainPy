@@ -100,70 +100,81 @@ def generar_maximales(reglas: List[Regla], recursos: Dict[str,int]) -> List[List
 
 # -- Simulación de un lapso con direccionamiento in/out --
 
-def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> None:
-    producciones: Dict[str, Dict[str,int]] = {mid:{} for mid in sistema.piel}
-    consumos: Dict[str, Dict[str,int]]    = {}
-    to_create: List[Tuple[str,str]]      = []
-    to_dissolve: List[str]               = []
+def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> Dict[str, List[Tuple[Regla,int]]]:
+    producciones: Dict[str, Dict[str,int]] = {mid: {} for mid in sistema.piel}
+    consumos:     Dict[str, Dict[str,int]] = {}
+    to_create:    List[Tuple[str,str]]   = []
+    to_dissolve:  List[str]              = []
+
+    # --- aquí almacenamos, para cada membrana, el maximal elegido ---
+    seleccionados: Dict[str, List[Tuple[Regla,int]]] = {}
 
     for mem in list(sistema.piel.values()):
         rec_disp = deepcopy(mem.recursos)
-        # calcular aplicables y priorizar
-        aplic = [r for r in mem.reglas if veces_aplicable(rec_disp,r)>0]
-        if modo=="secuencial":
-            # ... (igual que antes) omitido aquí ...
+        aplic = [r for r in mem.reglas if veces_aplicable(rec_disp, r) > 0]
+
+        if modo == "secuencial":
+            # ... (tu código secuencial, sin cambios) ...
             pass
+
         # modo max_paralelo
-        if modo=="max_paralelo" and aplic:
-            mp = max(r.prioridad for r in aplic)
-            top = [r for r in aplic if r.prioridad==mp]
+        if modo == "max_paralelo" and aplic:
+            mp  = max(r.prioridad for r in aplic)
+            top = [r for r in aplic if r.prioridad == mp]
             maxs = generar_maximales(top, rec_disp)
             if maxs:
                 random.shuffle(maxs)
                 elegido = maxs[0]
-                for r,cnt in elegido:
-                    # consumo
+                # guardamos el maximal elegido para esta membrana
+                seleccionados[mem.id] = elegido
+
+                # aplicamos el consumo-producción de ese maximal
+                for r, cnt in elegido:
                     cons = multiplicar_multiconjunto(r.izquierda, cnt)
                     rec_disp = resta_multiconjuntos(rec_disp, cons)
                     # producción con direccionamiento
                     for simb, num in r.derecha.items():
-                        # out
                         if simb.endswith("_out"):
-                            base = simb[:-4]
-                            padre = mem.padre
+                            base   = simb[:-4]
+                            padre  = mem.padre
                             if padre:
-                                producciones[padre][base] = producciones[padre].get(base,0) + num*cnt
-                        # in_j
+                                producciones[padre][base] = producciones[padre].get(base, 0) + num*cnt
                         elif "_in_" in simb:
                             base, target = simb.split("_in_")
-                            producciones[target][base] = producciones[target].get(base,0) + num*cnt
-                        # default (sin sufijo): queda aquí
+                            producciones[target][base] = producciones[target].get(base, 0) + num*cnt
                         else:
-                            producciones[mem.id][simb] = producciones[mem.id].get(simb,0) + num*cnt
-                    # crea / disuelve
+                            producciones[mem.id][simb] = producciones[mem.id].get(simb, 0) + num*cnt
+                    # creaciones/disoluciones
                     for _ in range(cnt):
-                        for nid in r.crea_membranas:   to_create.append((mem.id,nid))
+                        for nid in r.crea_membranas:   to_create.append((mem.id, nid))
                         for did in r.disuelve_membranas: to_dissolve.append(did)
-        # recursos restantes
+
+        # recursos que quedan en esta membrana tras el maximal
         consumos[mem.id] = rec_disp.copy()
 
     # sincronizar recursos y producciones
     for mid, prod in producciones.items():
         base = consumos.get(mid, sistema.piel[mid].recursos)
         sistema.piel[mid].recursos = union_multiconjuntos(base, prod)
-    # disoluciones
+
+    # procesar disoluciones
     for did in to_dissolve:
         if did in sistema.piel:
             p = sistema.piel[did].padre
             if p:
                 padre = sistema.piel[p]
                 padre.recursos = union_multiconjuntos(padre.recursos, sistema.piel[did].recursos)
-                # reubicar hijas
                 for c in sistema.piel[did].hijos:
-                    sistema.piel[c].padre = p; padre.hijos.append(c)
+                    sistema.piel[c].padre = p
+                    padre.hijos.append(c)
                 padre.hijos.remove(did)
             del sistema.piel[did]
-    # creaciones
+
+    # procesar creaciones
     for par, nid in to_create:
         if nid not in sistema.piel:
-            sistema.agregar_membrana(Membrana(nid,{}), par)
+            sistema.agregar_membrana(Membrana(nid, {}), par)
+
+    # devolvemos el diccionario de maximales aplicados por membrana
+    return seleccionados
+
