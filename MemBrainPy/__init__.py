@@ -5,7 +5,7 @@ import Lector
 
 
 #sistema = Lector.leerSistema("tests/Test1.pli")
-sistema = tests.actividad2(3,3)
+sistema =funciones.division(10, 3)
 
 
 simular_y_visualizar(sistema, pasos = 30, modo="max_paralelo")
