@@ -7,7 +7,7 @@ class Regla:
     def __init__(
         self,
         izquierda: Dict[str, int],
-        derecha: Dict[str, int],  # claves: símbolo, símbolo_out, símbolo_in_<id>
+        derecha: Dict[str, int],
         prioridad: int,
         crea_membranas: Optional[List[str]] = None,
         disuelve_membranas: Optional[List[str]] = None
@@ -42,7 +42,7 @@ class Membrana:
         return f"Membrana(id={self.id}, rec={self.recursos}, hijos={self.hijos})"
 
 class SistemaP:
-    def __init__(self,membrana_salida: Optional[str] = None):
+    def __init__(self, membrana_salida: Optional[str] = None):
         self.piel: Dict[str, Membrana] = {}
         self.membrana_salida = membrana_salida
 
@@ -55,6 +55,7 @@ class SistemaP:
     def __repr__(self):
         return f"SistemaP({list(self.piel.keys())})"
 
+
 # -- Funciones de multiconjuntos y aplicabilidad --
 
 def union_multiconjuntos(ms1: Dict[str,int], ms2: Dict[str,int]) -> Dict[str,int]:
@@ -62,21 +63,19 @@ def union_multiconjuntos(ms1: Dict[str,int], ms2: Dict[str,int]) -> Dict[str,int
     for k,v in ms2.items(): out[k] = out.get(k,0) + v
     return out
 
-
 def resta_multiconjuntos(ms: Dict[str,int], rest: Dict[str,int]) -> Dict[str,int]:
     out = ms.copy()
     for k,v in rest.items(): out[k] = out.get(k,0) - v
     return {k:v for k,v in out.items() if v>0}
-
 
 def veces_aplicable(rec: Dict[str,int], reg: Regla) -> int:
     m = float('inf')
     for k,v in reg.izquierda.items(): m = min(m, rec.get(k,0)//v)
     return 0 if m==float('inf') else m
 
-
 def multiplicar_multiconjunto(ms: Dict[str,int], veces: int) -> Dict[str,int]:
     return {k: v*veces for k,v in ms.items()}
+
 
 # -- Generación de maximales --
 
@@ -92,11 +91,11 @@ def generar_maximales(reglas: List[Regla], recursos: Dict[str,int]) -> List[List
                 sel.append((r, cnt))
                 backtrack(i+1, new_rec, sel)
                 sel.pop()
-        # comprobación de maximalidad global
         if all(veces_aplicable(rec, r)==0 for r in reglas):
             maximales.append(sel.copy())
     backtrack(0, recursos, [])
     return maximales
+
 
 # -- Simulación de un lapso con direccionamiento in/out --
 
@@ -106,7 +105,6 @@ def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> Dict[str, Li
     to_create:    List[Tuple[str,str]]   = []
     to_dissolve:  List[str]              = []
 
-    # --- aquí almacenamos, para cada membrana, el maximal elegido ---
     seleccionados: Dict[str, List[Tuple[Regla,int]]] = {}
 
     for mem in list(sistema.piel.values()):
@@ -114,10 +112,9 @@ def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> Dict[str, Li
         aplic = [r for r in mem.reglas if veces_aplicable(rec_disp, r) > 0]
 
         if modo == "secuencial":
-            # ... (tu código secuencial, sin cambios) ...
+            # ... tu lógica secuencial ...
             pass
 
-        # modo max_paralelo
         if modo == "max_paralelo" and aplic:
             mp  = max(r.prioridad for r in aplic)
             top = [r for r in aplic if r.prioridad == mp]
@@ -125,40 +122,39 @@ def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> Dict[str, Li
             if maxs:
                 random.shuffle(maxs)
                 elegido = maxs[0]
-                # guardamos el maximal elegido para esta membrana
                 seleccionados[mem.id] = elegido
 
-                # aplicamos el consumo-producción de ese maximal
                 for r, cnt in elegido:
                     cons = multiplicar_multiconjunto(r.izquierda, cnt)
                     rec_disp = resta_multiconjuntos(rec_disp, cons)
-                    # producción con direccionamiento
                     for simb, num in r.derecha.items():
                         if simb.endswith("_out"):
-                            base   = simb[:-4]
-                            padre  = mem.padre
+                            base  = simb[:-4]
+                            padre = mem.padre
                             if padre:
-                                producciones[padre][base] = producciones[padre].get(base, 0) + num*cnt
+                                producciones[padre][base] = producciones[padre].get(base,0) + num*cnt
                         elif "_in_" in simb:
                             base, target = simb.split("_in_")
-                            producciones[target][base] = producciones[target].get(base, 0) + num*cnt
+                            producciones[target][base] = producciones[target].get(base,0) + num*cnt
                         else:
-                            producciones[mem.id][simb] = producciones[mem.id].get(simb, 0) + num*cnt
-                    # creaciones/disoluciones
+                            producciones[mem.id][simb] = producciones[mem.id].get(simb,0) + num*cnt
                     for _ in range(cnt):
-                        for nid in r.crea_membranas:   to_create.append((mem.id, nid))
+                        for nid in r.crea_membranas:     to_create.append((mem.id, nid))
                         for did in r.disuelve_membranas: to_dissolve.append(did)
 
-        # recursos que quedan en esta membrana tras el maximal
         consumos[mem.id] = rec_disp.copy()
 
-    # sincronizar recursos y producciones
+    # aplicar consumos y producciones
     for mid, prod in producciones.items():
         base = consumos.get(mid, sistema.piel[mid].recursos)
         sistema.piel[mid].recursos = union_multiconjuntos(base, prod)
 
-    # procesar disoluciones
+    # procesar disoluciones, pero nunca de la membrana padre (root)
+    root_id = sistema.membrana_salida
     for did in to_dissolve:
+        if did == root_id:
+            # ignoramos cualquier intento de disolver la membrana raíz
+            continue
         if did in sistema.piel:
             p = sistema.piel[did].padre
             if p:
@@ -175,6 +171,4 @@ def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> Dict[str, Li
         if nid not in sistema.piel:
             sistema.agregar_membrana(Membrana(nid, {}), par)
 
-    # devolvemos el diccionario de maximales aplicados por membrana
     return seleccionados
-
