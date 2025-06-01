@@ -1,38 +1,48 @@
 """
 __init__.py
 
-Punto de entrada para registrar estadísticas de una simulación de SistemaP
-y luego visualizarla. Usa los módulos:
-  - SistemaP: simulación y registro de estadísticas.
-  - funciones: constructores de sistemas concretos.
-  - visualizadorAvanzado: visualización interactiva de la simulación.
-  - Lector: (opcional) para leer sistemas desde fichero.
+Punto de entrada para simular Sistemas P sin usar línea de comandos:
+los parámetros están hardcodeados para elegir entre lector (.pli) o función división,
+y decidir si se registran estadísticas o no.
 """
 
 from SistemaP import registrar_estadisticas
 from visualizadorAvanzado import simular_y_visualizar
 import funciones
-# import Lector  # Descomentar si se quiere leer desde fichero .pli
+from Lector import leer_sistema
 
 def main():
-    # 1) Construir (o leer) el sistema P a simular.
-    # Ejemplo usando división: 10 'a' dividido por 3.
-    sistema = funciones.division(10, 3)
+    # ---------------- Parámetros hardcodeados ----------------
+    # Elegir "lector" para leer un .pli, o "division" para usar la función de ejemplo:
+    modo_sistema = "division"     # Cambiar a "division" para usar funciones.division
 
-    # Si se prefiere leer desde un fichero .pli, descomentar:
-    # sistema = Lector.leerSistema("tests/Test1.pli")
+    # Si modo_sistema == "lector", indicar la ruta al .pli:
+    ruta_pli = "tests/Test2.pli"
 
-    # 2) Registrar estadísticas de la simulación (por ejemplo, 30 lapsos)
+    # Número de lapsos a simular:
     lapsos = 30
-    # El método devuelve un DataFrame; además, guardará el CSV en ./Estadisticas/
-    df_estadisticas = registrar_estadisticas(
-        sistema,
-        lapsos=lapsos,
-        modo="max_paralelo",
-        rng_seed=None,                            # Sin semilla fija (aleatorio en desempates)
-        csv_path="MemBrainPy/Estadisticas/estadisticas.csv"  # Cambiado para guardar dentro de la carpeta Estadisticas
-    )
-    print(f"Estadísticas guardadas en 'Estadisticas/estadisticas.csv' (columnas: {list(df_estadisticas.columns)})")
+
+    # Si registrar_estadisticas = True, guardará CSV en Estadisticas/estadisticas.csv:
+    registrar = True
+    # ---------------------------------------------------------
+
+    # 1) Construir el sistema según el modo seleccionado
+    if modo_sistema == "lector":
+        sistema = leer_sistema(ruta_pli)
+    else:  # modo_sistema == "division"
+        sistema = funciones.division(10, 3)
+
+    # 2) Si se pidió registrar estadísticas, ejecutarlo y guardar en ./Estadisticas/
+    if registrar:
+        csv_path = "MemBrainPy/Estadisticas/estadisticas.csv"
+        df_estadisticas = registrar_estadisticas(
+            sistema,
+            lapsos=lapsos,
+            modo="max_paralelo",
+            rng_seed=None,
+            csv_path=csv_path
+        )
+        print(f"Estadísticas guardadas en '{csv_path}' (columnas: {list(df_estadisticas.columns)})")
 
     # 3) Visualizar la simulación de forma interactiva
     simular_y_visualizar(sistema, pasos=lapsos, modo="max_paralelo")
