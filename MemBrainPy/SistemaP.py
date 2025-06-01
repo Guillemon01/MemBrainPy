@@ -1,174 +1,398 @@
+"""
+SistemaP.py
+
+Implementación “profesional” de un simulador de Sistemas P (modo máximo paralelo),
+con registro de estadísticas por lapso de simulación y exportación en CSV.
+"""
+
+from __future__ import annotations
 from copy import deepcopy
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple, DefaultDict
 import random
+import collections
+import pandas as pd
 
-# -- Clases básicas --
+
+# ----------------------------- TIPOS AUXILIARES ------------------------------
+
+Multiset = Dict[str, int]
+
+
+@dataclass
+class LapsoResult:
+    """
+    Contiene los datos de un lapso de simulación:
+      - seleccionados: parejas (Regla, veces) aplicados en cada membrana.
+      - consumos: multiconjuntos consumidos por cada membrana (lo que queda después de la fase de selección).
+      - producciones: multiconjuntos producidos para cada membrana este lapso.
+      - created: lista de tuplas (id_padre, id_nueva) de membranas creadas.
+      - dissolved: lista de IDs de membranas disueltas.
+    """
+    seleccionados: Dict[str, List[Tuple[Regla, int]]]
+    consumos: Dict[str, Multiset]
+    producciones: Dict[str, Multiset]
+    created: List[Tuple[str, str]]
+    dissolved: List[str]
+
+
+# ------------------------ UTILIDADES PARA MULTICONJUNTOS ----------------------
+
+def add_multiset(ms1: Multiset, ms2: Multiset) -> Multiset:
+    """
+    Devuelve la unión de dos multiconjuntos (sumando multiplicidades).
+    """
+    result: DefaultDict[str, int] = collections.defaultdict(int)
+    for sym, count in ms1.items():
+        result[sym] += count
+    for sym, count in ms2.items():
+        result[sym] += count
+    return dict(result)
+
+
+def sub_multiset(ms: Multiset, rest: Multiset) -> Multiset:
+    """
+    Resta el multiconjunto 'rest' de 'ms'. Elimina claves con multiplicidad <= 0.
+    """
+    result: DefaultDict[str, int] = collections.defaultdict(int)
+    for sym, count in ms.items():
+        result[sym] = count
+    for sym, count in rest.items():
+        result[sym] -= count
+    return {sym: cnt for sym, cnt in result.items() if cnt > 0}
+
+
+def multiset_times(ms: Multiset, times: int) -> Multiset:
+    """
+    Multiplica todas las multiplicidades del multiconjunto 'ms' por 'times'.
+    """
+    return {sym: cnt * times for sym, cnt in ms.items()}
+
+
+def max_applications(resources: Multiset, rule: Regla) -> int:
+    """
+    Dado un multiconjunto 'resources' y una regla 'rule',
+    devuelve el número máximo de veces que la regla puede aplicarse.
+    """
+    min_times = float('inf')
+    for sym, needed in rule.left.items():
+        available = resources.get(sym, 0)
+        min_times = min(min_times, available // needed)
+    if min_times == float('inf'):
+        return 0
+    return int(min_times)
+
+
+# --------------------------------- CLASES BÁSICAS -----------------------------
+
+@dataclass
 class Regla:
-    def __init__(
-        self,
-        izquierda: Dict[str, int],
-        derecha: Dict[str, int],
-        prioridad: int,
-        crea_membranas: Optional[List[str]] = None,
-        disuelve_membranas: Optional[List[str]] = None
-    ):
-        self.izquierda = izquierda
-        self.derecha = derecha
-        self.prioridad = prioridad
-        self.crea_membranas = crea_membranas or []
-        self.disuelve_membranas = disuelve_membranas or []
+    """
+    Una regla de evolución de un Sistema P de transición.
+    """
+    left: Multiset
+    right: Multiset
+    priority: int
+    create_membranes: List[str] = field(default_factory=list)
+    dissolve_membranes: List[str] = field(default_factory=list)
 
-    def total_consumo(self) -> int:
-        return sum(self.izquierda.values())
+    def total_consumption(self) -> int:
+        """
+        Suma total de objetos en el multiconjunto 'left'.
+        """
+        return sum(self.left.values())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
-            f"Regla(izq={self.izquierda}, der={self.derecha}, pri={self.prioridad}, "
-            f"crea={self.crea_membranas}, dis={self.disuelve_membranas})"
+            f"Regla(left={self.left}, right={self.right}, "
+            f"priority={self.priority}, create={self.create_membranes}, "
+            f"dissolve={self.dissolve_membranes})"
         )
 
-class Membrana:
-    def __init__(self, id_mem: str, recursos: Dict[str, int]):
-        self.id = id_mem
-        self.recursos = recursos
-        self.reglas: List[Regla] = []
-        self.hijos: List[str] = []
-        self.padre: Optional[str] = None
 
-    def agregar_regla(self, regla: Regla):
+@dataclass
+class Membrana:
+    """
+    Representa una membrana de un Sistema P.
+    - id_mem: identificador único de la membrana.
+    - resources: multiconjunto (diccionario) de objetos presentes en la membrana.
+    - reglas: lista de reglas asociadas a esta membrana.
+    - children: lista de IDs de membranas hijas.
+    - parent: ID de la membrana padre (None si es la piel).
+    """
+    id_mem: str
+    resources: Multiset
+    reglas: List[Regla] = field(default_factory=list)
+    children: List[str] = field(default_factory=list)
+    parent: Optional[str] = None
+
+    def add_regla(self, regla: Regla) -> None:
+        """
+        Agrega una Regla a la membrana.
+        """
         self.reglas.append(regla)
 
-    def __repr__(self):
-        return f"Membrana(id={self.id}, rec={self.recursos}, hijos={self.hijos})"
+    def __repr__(self) -> str:
+        return (
+            f"Membrana(id={self.id_mem!r}, resources={self.resources}, "
+            f"children={self.children}, parent={self.parent!r})"
+        )
 
+
+@dataclass
 class SistemaP:
-    def __init__(self, membrana_salida: Optional[str] = None):
-        self.piel: Dict[str, Membrana] = {}
-        self.membrana_salida = membrana_salida
+    """
+    Representa un Sistema P completo.
+    - skin: diccionario de todas las membranas indexado por su ID.
+    - output_membrane: ID de la membrana de salida (si hay).
+    """
+    skin: Dict[str, Membrana] = field(default_factory=dict)
+    output_membrane: Optional[str] = None
 
-    def agregar_membrana(self, membrana: Membrana, parent_id: Optional[str] = None):
-        membrana.padre = parent_id
-        self.piel[membrana.id] = membrana
+    def add_membrane(self, membrana: Membrana, parent_id: Optional[str] = None) -> None:
+        """
+        Inserta una membrana en el sistema.
+        Si 'parent_id' no es None, ajusta la relación padre-hijo.
+        """
+        membrana.parent = parent_id
+        self.skin[membrana.id_mem] = membrana
         if parent_id:
-            self.piel[parent_id].hijos.append(membrana.id)
+            self.skin[parent_id].children.append(membrana.id_mem)
 
-    def __repr__(self):
-        return f"SistemaP({list(self.piel.keys())})"
-
-
-# -- Funciones de multiconjuntos y aplicabilidad --
-
-def union_multiconjuntos(ms1: Dict[str,int], ms2: Dict[str,int]) -> Dict[str,int]:
-    out = ms1.copy()
-    for k,v in ms2.items(): out[k] = out.get(k,0) + v
-    return out
-
-def resta_multiconjuntos(ms: Dict[str,int], rest: Dict[str,int]) -> Dict[str,int]:
-    out = ms.copy()
-    for k,v in rest.items(): out[k] = out.get(k,0) - v
-    return {k:v for k,v in out.items() if v>0}
-
-def veces_aplicable(rec: Dict[str,int], reg: Regla) -> int:
-    m = float('inf')
-    for k,v in reg.izquierda.items(): m = min(m, rec.get(k,0)//v)
-    return 0 if m==float('inf') else m
-
-def multiplicar_multiconjunto(ms: Dict[str,int], veces: int) -> Dict[str,int]:
-    return {k: v*veces for k,v in ms.items()}
+    def __repr__(self) -> str:
+        return f"SistemaP(mem={list(self.skin.keys())}, output={self.output_membrane!r})"
 
 
-# -- Generación de maximales --
+# --------------------------- GENERACIÓN DE MAXIMALES --------------------------
 
-def generar_maximales(reglas: List[Regla], recursos: Dict[str,int]) -> List[List[Tuple[Regla,int]]]:
-    maximales: List[List[Tuple[Regla,int]]] = []
-    def backtrack(start:int, rec:Dict[str,int], sel:List[Tuple[Regla,int]]):
-        for i in range(start, len(reglas)):
-            r = reglas[i]
-            maxv = veces_aplicable(rec, r)
-            for cnt in range(1, maxv+1):
-                cons = multiplicar_multiconjunto(r.izquierda, cnt)
-                new_rec = resta_multiconjuntos(rec, cons)
-                sel.append((r, cnt))
-                backtrack(i+1, new_rec, sel)
-                sel.pop()
-        if all(veces_aplicable(rec, r)==0 for r in reglas):
-            maximales.append(sel.copy())
+def generar_maximales(
+    reglas: List[Regla],
+    recursos: Multiset
+) -> List[List[Tuple[Regla, int]]]:
+    """
+    Dadas una lista de reglas 'reglas' y un multiconjunto 'recursos',
+    genera recursivamente todas las selecciones máximas de pares (Regla, veces)
+    aplicables al multiconjunto 'recursos'.
+    """
+    maximales: List[List[Tuple[Regla, int]]] = []
+
+    def backtrack(start_idx: int, current_resources: Multiset, seleccionado: List[Tuple[Regla, int]]):
+        added = False
+        for idx in range(start_idx, len(reglas)):
+            regla = reglas[idx]
+            max_v = max_applications(current_resources, regla)
+            if max_v <= 0:
+                continue
+            added = True
+            for count in range(1, max_v + 1):
+                consume = multiset_times(regla.left, count)
+                new_resources = sub_multiset(current_resources, consume)
+                seleccionado.append((regla, count))
+                backtrack(idx + 1, new_resources, seleccionado)
+                seleccionado.pop()
+        if not added:
+            # Si no podemos aplicar más reglas, guardamos la selección actual
+            maximales.append(list(seleccionado))
+
     backtrack(0, recursos, [])
     return maximales
 
 
-# -- Simulación de un lapso con direccionamiento in/out --
+# --------------------------- SIMULACIÓN DE UN LAPSO ---------------------------
 
-def simular_lapso(sistema: SistemaP, modo: str = "max_paralelo") -> Dict[str, List[Tuple[Regla,int]]]:
-    producciones: Dict[str, Dict[str,int]] = {mid: {} for mid in sistema.piel}
-    consumos:     Dict[str, Dict[str,int]] = {}
-    to_create:    List[Tuple[str,str]]   = []
-    to_dissolve:  List[str]              = []
+def simular_lapso(
+    sistema: SistemaP,
+    modo: str = "max_paralelo",
+    rng_seed: Optional[int] = None
+) -> LapsoResult:
+    """
+    Simula un lapso de un Sistema P en 'modo'.
+    Actualmente solo implementamos "max_paralelo". Las membranas actúan
+    simultáneamente; en cada membrana, se elige un multiconjunto máximo
+    entre las reglas de mayor prioridad.
 
-    seleccionados: Dict[str, List[Tuple[Regla,int]]] = {}
+    Args:
+        sistema: SistemaP a simular.
+        modo: "max_paralelo" (por defecto) o "secuencial" (pendiente).
+        rng_seed: Semilla opcional para reproducibilidad del random.shuffle.
 
-    for mem in list(sistema.piel.values()):
-        rec_disp = deepcopy(mem.recursos)
-        aplic = [r for r in mem.reglas if veces_aplicable(rec_disp, r) > 0]
+    Returns:
+        LapsoResult con:
+          - seleccionados: qué (Regla, veces) se aplicaron en cada membrana.
+          - consumos: recursos remanentes de cada membrana tras consumir.
+          - producciones: recursos que se producen hacia cada membrana.
+          - created: lista de (id_padre, id_nueva) de membranas creadas.
+          - dissolved: lista de IDs de membranas disueltas.
+    """
+    if rng_seed is not None:
+        random.seed(rng_seed)
+
+    producciones: Dict[str, Multiset] = {mid: {} for mid in sistema.skin}
+    consumos: Dict[str, Multiset] = {}
+    to_create: List[Tuple[str, str]] = []
+    to_dissolve: List[str] = []
+    seleccionados: Dict[str, List[Tuple[Regla, int]]] = {}
+
+    for mem in list(sistema.skin.values()):
+        recursos_disp = deepcopy(mem.resources)
+        aplicables = [r for r in mem.reglas if max_applications(recursos_disp, r) > 0]
 
         if modo == "secuencial":
-            # ... tu lógica secuencial ...
+            # Lógica secuencial no implementada
             pass
 
-        if modo == "max_paralelo" and aplic:
-            mp  = max(r.prioridad for r in aplic)
-            top = [r for r in aplic if r.prioridad == mp]
-            maxs = generar_maximales(top, rec_disp)
-            if maxs:
-                random.shuffle(maxs)
-                elegido = maxs[0]
-                seleccionados[mem.id] = elegido
+        if modo == "max_paralelo" and aplicables:
+            max_prio = max(r.priority for r in aplicables)
+            top_rules = [r for r in aplicables if r.priority == max_prio]
+            maxsets = generar_maximales(top_rules, recursos_disp)
 
-                for r, cnt in elegido:
-                    cons = multiplicar_multiconjunto(r.izquierda, cnt)
-                    rec_disp = resta_multiconjuntos(rec_disp, cons)
-                    for simb, num in r.derecha.items():
+            if maxsets:
+                random.shuffle(maxsets)
+                elegido = maxsets[0]
+                seleccionados[mem.id_mem] = elegido
+
+                for regla, cnt in elegido:
+                    consumo_total = multiset_times(regla.left, cnt)
+                    recursos_disp = sub_multiset(recursos_disp, consumo_total)
+
+                    for simb, num in regla.right.items():
                         if simb.endswith("_out"):
-                            base  = simb[:-4]
-                            padre = mem.padre
-                            if padre:
-                                producciones[padre][base] = producciones[padre].get(base,0) + num*cnt
+                            base = simb[:-4]
+                            padre_id = mem.parent
+                            if padre_id:
+                                producciones[padre_id][base] = (
+                                    producciones[padre_id].get(base, 0) + num * cnt
+                                )
                         elif "_in_" in simb:
                             base, target = simb.split("_in_")
-                            producciones[target][base] = producciones[target].get(base,0) + num*cnt
+                            if target in sistema.skin:
+                                producciones[target][base] = (
+                                    producciones[target].get(base, 0) + num * cnt
+                                )
                         else:
-                            producciones[mem.id][simb] = producciones[mem.id].get(simb,0) + num*cnt
+                            producciones[mem.id_mem][simb] = (
+                                producciones[mem.id_mem].get(simb, 0) + num * cnt
+                            )
+
                     for _ in range(cnt):
-                        for nid in r.crea_membranas:     to_create.append((mem.id, nid))
-                        for did in r.disuelve_membranas: to_dissolve.append(did)
+                        for new_id in regla.create_membranes:
+                            to_create.append((mem.id_mem, new_id))
+                        for dis_id in regla.dissolve_membranes:
+                            to_dissolve.append(dis_id)
 
-        consumos[mem.id] = rec_disp.copy()
+        consumos[mem.id_mem] = recursos_disp
 
-    # aplicar consumos y producciones
-    for mid, prod in producciones.items():
-        base = consumos.get(mid, sistema.piel[mid].recursos)
-        sistema.piel[mid].recursos = union_multiconjuntos(base, prod)
+    # 2) Aplicar producciones y actualizar recursos
+    for mem_id, prod in producciones.items():
+        base = consumos.get(mem_id, sistema.skin[mem_id].resources)
+        sistema.skin[mem_id].resources = add_multiset(base, prod)
 
-    # procesar disoluciones, pero nunca de la membrana padre (root)
-    root_id = sistema.membrana_salida
-    for did in to_dissolve:
-        if did == root_id:
-            # ignoramos cualquier intento de disolver la membrana raíz
+    # 3) Procesar disoluciones (salvo la membrana de piel/raíz)
+    root_id = sistema.output_membrane
+    dissolved_list: List[str] = []
+    for dis_id in to_dissolve:
+        if dis_id == root_id:
             continue
-        if did in sistema.piel:
-            p = sistema.piel[did].padre
-            if p:
-                padre = sistema.piel[p]
-                padre.recursos = union_multiconjuntos(padre.recursos, sistema.piel[did].recursos)
-                for c in sistema.piel[did].hijos:
-                    sistema.piel[c].padre = p
-                    padre.hijos.append(c)
-                padre.hijos.remove(did)
-            del sistema.piel[did]
+        if dis_id in sistema.skin:
+            padre_id = sistema.skin[dis_id].parent
+            if padre_id:
+                padre = sistema.skin[padre_id]
+                heredados = sistema.skin[dis_id].resources
+                padre.resources = add_multiset(padre.resources, heredados)
+                for hijo_id in sistema.skin[dis_id].children:
+                    sistema.skin[hijo_id].parent = padre_id
+                    padre.children.append(hijo_id)
+                padre.children.remove(dis_id)
+            del sistema.skin[dis_id]
+            dissolved_list.append(dis_id)
 
-    # procesar creaciones
-    for par, nid in to_create:
-        if nid not in sistema.piel:
-            sistema.agregar_membrana(Membrana(nid, {}), par)
+    # 4) Procesar creaciones
+    created_list: List[Tuple[str, str]] = []
+    for parent_id, new_id in to_create:
+        if new_id not in sistema.skin:
+            nueva = Membrana(id_mem=new_id, resources={})
+            sistema.add_membrane(nueva, parent_id)
+            created_list.append((parent_id, new_id))
 
-    return seleccionados
+    return LapsoResult(
+        seleccionados=seleccionados,
+        consumos=consumos,
+        producciones=producciones,
+        created=created_list,
+        dissolved=dissolved_list
+    )
+
+
+# ---------------------- REGISTRAR ESTADÍSTICAS MÚLTIPLES -----------------------
+
+def registrar_estadisticas(
+    sistema: SistemaP,
+    lapsos: int,
+    modo: str = "max_paralelo",
+    rng_seed: Optional[int] = None,
+    csv_path: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Ejecuta 'lapsos' iteraciones de simular_lapso sobre el mismo sistema (que evoluciona
+    en cada lapso) y acumula los resultados de cada uno. Luego, construye y
+    retorna un DataFrame con los detalles de cada membrana en cada lapso.
+
+    Cada fila del DataFrame corresponde a:
+      - lapso: índice (empezando en 1) del paso de simulación.
+      - membrana: ID de la membrana.
+      - recursos_restantes: multiconjunto de recursos después de consumir.
+      - producciones: multiconjunto producido hacia esa membrana en el lapso.
+      - aplicaciones: lista de cadenas describiendo (regla, veces) aplicadas.
+      - creadas_global: lista de tuplas (id_padre, id_nueva) creadas en el lapso.
+      - disueltas_global: lista de IDs de membranas disueltas en el lapso.
+
+    Args:
+        sistema: SistemaP que se va a simular (se modifica en cada lapso).
+        lapsos: número de lapsos a simular.
+        modo: modo de simulación ("max_paralelo" o "secuencial").
+        rng_seed: semilla opcional para reproducibilidad; cada lapso usa seed=rng_seed+i.
+        csv_path: ruta opcional donde guardar el CSV resultante; si es None, solo retorna el DataFrame.
+
+    Returns:
+        pd.DataFrame con las estadísticas detalladas por lapso y membrana.
+    """
+    all_results: List[LapsoResult] = []
+    for i in range(lapsos):
+        seed = None
+        if rng_seed is not None:
+            seed = rng_seed + i
+        lapso_res = simular_lapso(sistema, modo=modo, rng_seed=seed)
+        all_results.append(lapso_res)
+
+    # Construir lista de filas
+    rows = []
+    for idx_l, lapso in enumerate(all_results, start=1):
+        # Representar created y dissolved como cadenas
+        cre_str = ";".join(f"{p}->{c}" for p, c in lapso.created) if lapso.created else ""
+        dis_str = ";".join(lapso.dissolved) if lapso.dissolved else ""
+        for mem_id, _ in lapso.consumos.items():
+            rec_rest = lapso.consumos.get(mem_id, {})
+            prod = lapso.producciones.get(mem_id, {})
+            apps = lapso.seleccionados.get(mem_id, [])
+            # Formatear aplicaciones como "r_left->r_right(x veces)"
+            apps_str = ";".join(
+                f"{list(r.left.items())}->{list(r.right.items())}×{cnt}"
+                for r, cnt in apps
+            ) if apps else ""
+            rows.append({
+                "lapso": idx_l,
+                "membrana": mem_id,
+                "recursos_restantes": str(rec_rest),
+                "producciones": str(prod),
+                "aplicaciones": apps_str,
+                "creadas_global": cre_str,
+                "disueltas_global": dis_str
+            })
+
+    df = pd.DataFrame(rows)
+    if csv_path:
+        df.to_csv(csv_path, index=False)
+    else:
+        # Imprimir CSV por consola
+        print(df.to_csv(index=False))
+    return df

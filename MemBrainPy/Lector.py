@@ -1,3 +1,10 @@
+"""
+Lector.py
+
+Módulo profesional para leer archivos .pli siguiendo la sintaxis de P-Lingua
+y construir un objeto SistemaP con membranas, recursos y reglas.
+"""
+
 import re
 from typing import Dict, List, Tuple, Optional
 
@@ -6,129 +13,192 @@ from SistemaP import SistemaP, Membrana, Regla
 
 def parse_multiset(s: str) -> Dict[str, int]:
     """
-    Parsea una cadena de la forma 'a*2, b, c*3' en un diccionario {'a':2, 'b':1, 'c':3}.
+    Parsea una cadena de multiconjunto de P-Lingua, por ejemplo:
+        "a*2, b, c*3"
+    Retorna un diccionario {'a': 2, 'b': 1, 'c': 3}.
     """
-    result: Dict[str, int] = {}
+    conteo: Dict[str, int] = {}
     for part in re.split(r',\s*', s.strip()):
         if not part:
             continue
-        m = re.match(r"(\w+)\s*(?:\*\s*(\d+))?", part)
+        m = re.fullmatch(r"(\w+)\s*(?:\*\s*(\d+))?", part)
         if not m:
             raise ValueError(f"Elemento de multiconjunto inválido: '{part}'")
-        sym = m.group(1)
-        cnt = int(m.group(2)) if m.group(2) else 1
-        result[sym] = result.get(sym, 0) + cnt
-    return result
+        simbolo = m.group(1)
+        cantidad = int(m.group(2)) if m.group(2) else 1
+        conteo[simbolo] = conteo.get(simbolo, 0) + cantidad
+    return conteo
 
 
-def parse_mu(s: str) -> List[Tuple[str, Optional[str]]]:
+def parse_structure(s: str) -> List[Tuple[str, Optional[str]]]:
     """
-    Parsea la definición de estructura de membranas en notación de paréntesis anidados.
+    Parsea la sección @mu de P-Lingua, que define la jerarquía de membranas
+    en notación de corchetes anidados con apóstrofes para IDs.
     Ejemplo: "[[[]'4]'2[[]'5]'3]'1"
-    Devuelve lista de tuplas (mem_id, parent_id).
-    """
-    results: List[Tuple[str, Optional[str]]] = []
+    Retorna una lista de tuplas (mem_id, parent_id), donde parent_id = None para la piel.
 
-    def helper(start: int, parent: Optional[str]) -> int:
-        # start apunta a '['
-        assert s[start] == '[', "Se esperaba '[' en parse_mu"
+    Lanza ValueError si la sintaxis no es correcta o hay corchetes desbalanceados.
+    """
+    result: List[Tuple[str, Optional[str]]] = []
+
+    def helper(idx: int, parent: Optional[str]) -> int:
+        # idx apunta a '['
+        if idx >= len(s) or s[idx] != '[':
+            raise ValueError(f"Se esperaba '[', pero se encontró '{s[idx]}' en posición {idx}")
         depth = 0
-        # buscar ']' correspondiente
-        for j in range(start, len(s)):
+        # buscar el corchete de cierre correspondiente
+        for j in range(idx, len(s)):
             if s[j] == '[':
                 depth += 1
             elif s[j] == ']':
                 depth -= 1
                 if depth == 0:
-                    end = j
+                    close_idx = j
                     break
         else:
-            raise ValueError("No se encontró ']' de cierre para '[' en parse_mu")
+            raise ValueError("Corchetes '[' y ']' desbalanceados en parse_structure")
 
-        # leerID tras ']'
-        k = end + 1
+        # tras ']', debe venir apóstrofe seguido del ID alfanumérico
+        k = close_idx + 1
         while k < len(s) and s[k].isspace():
             k += 1
         if k >= len(s) or s[k] != "'":
-            raise ValueError("Se esperaba apóstrofe y ID tras ']' en parse_mu")
+            raise ValueError(f"Se esperaba apóstrofe tras ']' en posición {close_idx}, se encontró '{s[k]}'")
         k += 1
-        m = k
-        while m < len(s) and s[m].isalnum():
-            m += 1
-        mem_id = s[k:m]
-        results.append((mem_id, parent))
+        start_id = k
+        while k < len(s) and s[k].isalnum():
+            k += 1
+        if start_id == k:
+            raise ValueError(f"ID de membrana vacío en parse_structure cerca de índice {start_id}")
+        mem_id = s[start_id:k]
+        result.append((mem_id, parent))
 
-        # recorrer hijos dentro de [start+1:end]
-        i = start + 1
-        while i < end:
+        # procesar contenido interno [idx+1:close_idx] en busca de hijos
+        i = idx + 1
+        while i < close_idx:
             if s[i] == '[':
-                # parse hijo recursivamente
                 i = helper(i, mem_id)
             else:
                 i += 1
-        return m  # devolver índice posterior al ID
+        return k  # posición posterior al ID
 
-    # arrancar desde el primer '['
-    helper(0, None)
-    return results
+    # iniciar desde el primer '['
+    pos0 = s.find('[')
+    if pos0 == -1:
+        raise ValueError("No se encontró '[' inicial en la definición @mu")
+    helper(pos0, None)
+    return result
 
 
-def leerSistema(path: str) -> SistemaP:
+def parse_rules(s: str) -> List[Tuple[str, Dict[str, int], Dict[str, int], int]]:
     """
-    Lee un archivo .pli y devuelve un SistemaP inicializado.
-    Se esperan secciones:
-      - @mu = ...;
-      - @ms(i) = ...;
-      - [L --> R] 'm;
+    Parsea todas las reglas en el texto dado, con la sintaxis:
+        [L --> R]'<mem_id>';
+    donde L y R son multiconjuntos (R opcionalmente con sufijos _out o _in_<destino>).
+    Retorna una lista de tuplas:
+        (mem_id, izquierda_dict, derecha_dict, prioridad)
+    Actualmente se asume prioridad predeterminada 1; si se extiende la sintaxis para
+    prioridades, ajustar aquí.
+
+    Lanza ValueError si alguna regla no coincide con el patrón esperado.
     """
-    text = ''
+    rules: List[Tuple[str, Dict[str, int], Dict[str, int], int]] = []
+    # Patrón: [lado --> lado]'<mem_id>'; opcionalmente permitir espacios
+    regla_pat = re.compile(
+        r'\[\s*(.+?)\s*-->\s*(.+?)\s*\]\s*\'\s*(\w+)\s*\'\s*;'
+    )
+    for m in regla_pat.finditer(s):
+        left_str = m.group(1).strip()
+        right_str = m.group(2).strip()
+        mem_id = m.group(3).strip()
+
+        izquierda = parse_multiset(left_str)
+
+        # Procesar multiconjunto derecho: puede incluir sufijos _out o _in_dest
+        derecha: Dict[str, int] = {}
+        # Separa por comas, pero aquí podemos reutilizar parse_multiset si no hay sufijos complejos
+        for part in re.split(r',\s*', right_str):
+            if not part:
+                continue
+            # Detectar sufijos "_out" o "_in_<dest>"
+            m2 = re.fullmatch(r"(\w+?)(?:_out|_in_\w+)?(?:\*\s*(\d+))?", part)
+            if not m2:
+                raise ValueError(f"Elemento de multiconjunto derecho inválido: '{part}'")
+            simbolo = m2.group(1)
+            cantidad = int(m2.group(2)) if m2.group(2) else 1
+            suffix_match = re.search(r"(_out|_in_\w+)", part)
+            if suffix_match:
+                simbolo_full = simbolo + suffix_match.group(1)
+            else:
+                simbolo_full = simbolo
+            derecha[simbolo_full] = derecha.get(simbolo_full, 0) + cantidad
+
+        prioridad = 1  # Default; para ampliar sintaxis, extraer si se especifica
+        rules.append((mem_id, izquierda, derecha, prioridad))
+
+    return rules
+
+
+def leer_sistema(path: str) -> SistemaP:
+    """
+    Lee un archivo .pli siguiendo la sintaxis de P-Lingua y construye un SistemaP.
+    Se esperan tres secciones (en cualquier orden):
+      1) @mu = <estructura>;    // define membranas y anidamiento
+      2) @ms(<id>) = <multiconjunto>;  // recursos iniciales
+      3) [L --> R]'<id>';        // reglas asociadas a membrana <id>
+
+    Ejemplo mínimo:
+
+        @mu = [[[]'4]'2[[]'5]'3]'1;
+        @ms(1) = a*3, b;
+        [a --> c_out] '1';
+        [b, c --> d_in_4] '2';
+
+    Args:
+        path: ruta al archivo .pli.
+
+    Retorna:
+        SistemaP con membranas, recursos y reglas cargados.
+
+    Lanza:
+        ValueError si falta alguna sección o hay sintaxis incorrecta.
+    """
     with open(path, 'r', encoding='utf-8') as f:
         text = f.read()
 
-    # eliminar comentarios /* ... */
+    # Eliminar comentarios del tipo /* ... */
     text = re.sub(r'/\*[\s\S]*?\*/', '', text)
 
-    # parsear estructura
+    # ===== Parsear sección @mu =====
     mu_match = re.search(r'@mu\s*=\s*(.+?);', text)
     if not mu_match:
         raise ValueError("No se encontró la definición @mu en el archivo .pli")
     mu_str = mu_match.group(1).strip()
-    mem_list = parse_mu(mu_str)
+    structure = parse_structure(mu_str)
 
-    sistema = SistemaP()
-    # crear membranas (recursos vacíos)
-    for mem_id, parent in mem_list:
-        mem = Membrana(mem_id, {})
-        sistema.agregar_membrana(mem, parent)
+    sistema = SistemaP(output_membrane=None)
+    # Crear membranas (con recursos vacíos inicialmente)
+    for mem_id, parent_id in structure:
+        membrana = Membrana(id_mem=mem_id, resources={})
+        sistema.add_membrane(membrana, parent_id)
 
-    # parsear multisets
-    for match in re.finditer(r'@ms\(\s*(\d+)\s*\)\s*=\s*(.+?);', text):
-        mem_id = match.group(1)
-        ms_str = match.group(2)
+    # ===== Parsear recursos @ms(id) =====
+    # Patrón para multiconjuntos: @ms(<id>) = <lista>;
+    ms_pat = re.compile(r'@ms\s*\(\s*(\w+)\s*\)\s*=\s*(.+?);')
+    for m in ms_pat.finditer(text):
+        mem_id = m.group(1).strip()
+        ms_str = m.group(2).strip()
         recursos = parse_multiset(ms_str)
-        mem = sistema.obtener_membrana(mem_id)
-        if not mem:
-            raise ValueError(f"Membrana {mem_id} no definida en estructura @mu")
-        mem.recursos = recursos
+        if mem_id not in sistema.skin:
+            raise ValueError(f"Membrana '{mem_id}' en @ms no definida en @mu")
+        sistema.skin[mem_id].resources = recursos
 
-    # parsear reglas
-    rule_pat = r'\[(.+?)-->\s*(.+?)\]\s*\'(\d+);'
-    for rm in re.finditer(rule_pat, text):
-        left_str = rm.group(1).strip()
-        right_str = rm.group(2).strip()
-        mem_id = rm.group(3)
-
-        izquierda = parse_multiset(left_str)
-        # procesar derecha ignorando paréntesis (out/in)
-        symbols = re.findall(r"(\w+)(?:\s*\([^)]*\))?", right_str)
-        derecha: Dict[str, int] = {}
-        for sym in symbols:
-            derecha[sym] = derecha.get(sym, 0) + 1
-
-        regla = Regla(izquierda, derecha, prioridad=0)
-        mem = sistema.obtener_membrana(mem_id)
-        if not mem:
-            raise ValueError(f"Regla asignada a membrana desconocida {mem_id}")
-        mem.agregar_regla(regla)
+    # ===== Parsear reglas =====
+    reglas_parsed = parse_rules(text)
+    for mem_id, izquierda, derecha, prioridad in reglas_parsed:
+        if mem_id not in sistema.skin:
+            raise ValueError(f"Regla asignada a membrana desconocida '{mem_id}'")
+        regla = Regla(left=izquierda, right=derecha, priority=prioridad)
+        sistema.skin[mem_id].add_regla(regla)
 
     return sistema
