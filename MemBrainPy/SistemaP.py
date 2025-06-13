@@ -206,26 +206,25 @@ def simular_lapso(
     rng_seed: Optional[int] = None
 ) -> LapsoResult:
     """
-    Simula un lapso de un Sistema P en 'modo'.
-    Actualmente solo implementamos "max_paralelo". Las membranas actúan
-    simultáneamente; en cada membrana, se elige un multiconjunto máximo
-    entre las reglas de mayor prioridad.
+    Simula un lapso de un Sistema P en 'modo', usando rng_seed para crear
+    un RNG local. Con ello, dado el mismo rng_seed, la selección aleatoria
+    de máximales es reproducible.
 
     Args:
         sistema: SistemaP a simular.
         modo: "max_paralelo" (por defecto) o "secuencial" (pendiente).
-        rng_seed: Semilla opcional para reproducibilidad del random.shuffle.
+        rng_seed: semilla opcional para reproducibilidad de rng.shuffle.
 
     Returns:
         LapsoResult con:
           - seleccionados: qué (Regla, veces) se aplicaron en cada membrana.
-          - consumos: recursos remanentes de cada membrana tras consumir.
-          - producciones: recursos que se producen hacia cada membrana.
-          - created: lista de (id_padre, id_nueva) de membranas creadas.
-          - dissolved: lista de IDs de membranas disueltas.
+          - consumos: recursos remanentes de cada membrana tras consumo.
+          - producciones: recursos producidos hacia cada membrana.
+          - created: lista de (id_padre, id_nueva) creadas.
+          - dissolved: lista de IDs disueltas.
     """
-    if rng_seed is not None:
-        random.seed(rng_seed)
+    # Crear un RNG local; si rng_seed es None, se inicializa de forma no determinista
+    rng = random.Random(rng_seed)
 
     producciones: Dict[str, Multiset] = {mid: {} for mid in sistema.skin}
     consumos: Dict[str, Multiset] = {}
@@ -233,6 +232,7 @@ def simular_lapso(
     to_dissolve: List[str] = []
     seleccionados: Dict[str, List[Tuple[Regla, int]]] = {}
 
+    # Fase 1: selección y consumo en cada membrana
     for mem in list(sistema.skin.values()):
         recursos_disp = deepcopy(mem.resources)
         aplicables = [r for r in mem.reglas if max_applications(recursos_disp, r) > 0]
@@ -241,20 +241,24 @@ def simular_lapso(
             # Lógica secuencial no implementada
             pass
 
-        if modo == "max_paralelo" and aplicables:
+        elif modo == "max_paralelo" and aplicables:
+            # Filtrar reglas de máxima prioridad
             max_prio = max(r.priority for r in aplicables)
             top_rules = [r for r in aplicables if r.priority == max_prio]
             maxsets = generar_maximales(top_rules, recursos_disp)
 
             if maxsets:
-                random.shuffle(maxsets)
+                # Reordenamiento reproducible según la semilla
+                rng.shuffle(maxsets)
                 elegido = maxsets[0]
                 seleccionados[mem.id_mem] = elegido
 
+                # Aplicar cada regla seleccionada
                 for regla, cnt in elegido:
                     consumo_total = multiset_times(regla.left, cnt)
                     recursos_disp = sub_multiset(recursos_disp, consumo_total)
 
+                    # Registrar producciones (_out e _in_)
                     for simb, num in regla.right.items():
                         if simb.endswith("_out"):
                             base = simb[:-4]
@@ -274,20 +278,22 @@ def simular_lapso(
                                 producciones[mem.id_mem].get(simb, 0) + num * cnt
                             )
 
+                    # Anotar creaciones y disoluciones
                     for _ in range(cnt):
                         for new_id in regla.create_membranes:
                             to_create.append((mem.id_mem, new_id))
                         for dis_id in regla.dissolve_membranes:
                             to_dissolve.append(dis_id)
 
+        # Guardar recursos restantes tras consumo
         consumos[mem.id_mem] = recursos_disp
 
-    # 2) Aplicar producciones y actualizar recursos
+    # Fase 2: aplicar producciones y actualizar recursos
     for mem_id, prod in producciones.items():
         base = consumos.get(mem_id, sistema.skin[mem_id].resources)
         sistema.skin[mem_id].resources = add_multiset(base, prod)
 
-    # 3) Procesar disoluciones (salvo la membrana de piel/raíz)
+    # Fase 3: procesar disoluciones
     root_id = sistema.output_membrane
     dissolved_list: List[str] = []
     for dis_id in to_dissolve:
@@ -297,6 +303,7 @@ def simular_lapso(
             padre_id = sistema.skin[dis_id].parent
             if padre_id:
                 padre = sistema.skin[padre_id]
+                # Heredar recursos y reasignar hijos
                 heredados = sistema.skin[dis_id].resources
                 padre.resources = add_multiset(padre.resources, heredados)
                 for hijo_id in sistema.skin[dis_id].children:
@@ -306,7 +313,7 @@ def simular_lapso(
             del sistema.skin[dis_id]
             dissolved_list.append(dis_id)
 
-    # 4) Procesar creaciones
+    # Fase 4: procesar creaciones de nuevas membranas
     created_list: List[Tuple[str, str]] = []
     for parent_id, new_id in to_create:
         if new_id not in sistema.skin:
@@ -321,6 +328,7 @@ def simular_lapso(
         created=created_list,
         dissolved=dissolved_list
     )
+
 
 
 # ---------------------- REGISTRAR ESTADÍSTICAS MÚLTIPLES -----------------------

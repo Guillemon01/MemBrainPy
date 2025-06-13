@@ -2,7 +2,6 @@
 visualizadorAvanzado.py
 
 Módulo para visualizar la simulación de Sistemas P, usando matplotlib.
-Adaptado para trabajar con el módulo 'SistemaP' que ahora devuelve LapsoResult.
 """
 
 from __future__ import annotations
@@ -135,7 +134,8 @@ def dibujar_reglas(fig: plt.Figure, sistema: SistemaP) -> None:
 def simular_y_visualizar(
     sistema: SistemaP,
     pasos: int = 5,
-    modo: str = "max_paralelo"
+    modo: str = "max_paralelo",
+    rng_seed: Optional[int] = None
 ) -> None:
     """
     Permite navegar (←, →) entre varios estados de simulación hasta 'pasos':
@@ -274,7 +274,7 @@ def simular_y_visualizar(
         if event.key == "right" and idx < pasos:
             if idx == len(historial) - 1:
                 copia = deepcopy(historial[idx])
-                lapso_res: LapsoResult = simular_lapso(copia, modo=modo)
+                lapso_res: LapsoResult = simular_lapso(copia, modo=modo, rng_seed=rng_seed)
                 historial.append(copia)
                 max_aplicados.append(lapso_res.seleccionados)
             idx += 1
