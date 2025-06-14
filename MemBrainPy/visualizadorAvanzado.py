@@ -300,12 +300,12 @@ def simular_varios_y_visualizar(
     Parámetros idénticos a simular_y_visualizar, pero recibe una lista de sistemas.
     Navegación con flechas izquierda/derecha para retroceder y avanzar pasos.
     '''
+    import textwrap  # para ajustar texto largo
     # Validar que todos los elementos sean instancias de SistemaP
     for idx_s, sis in enumerate(sistemas):
         if not isinstance(sis, SistemaP):
             raise TypeError(f"Elemento {idx_s} de 'sistemas' no es un SistemaP, es {type(sis).__name__}")
 
-    # Inicialización de historiales y seleccionados por sistema
     # Inicialización de historiales y seleccionados por sistema
     historiales: List[List[SistemaP]] = [[deepcopy(s) for s in sistemas]]
     max_aplicados: List[List[Optional[Dict[str, List[Tuple[Regla, int]]]]]] = [[None] * len(sistemas)]
@@ -314,8 +314,8 @@ def simular_varios_y_visualizar(
     # Configuración de subplots según número de sistemas
     n = len(sistemas)
     cols = min(3, n)
-    rows = math.ceil(n / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 6, rows * 4))
+    rows = math.ceil(n/cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(cols*6, rows*4))
     axes_list = axes.flatten() if hasattr(axes, 'flatten') else [axes]
 
     def dibujar_estado_varios(i: int) -> None:
@@ -323,99 +323,94 @@ def simular_varios_y_visualizar(
         for j, ax in enumerate(axes_list):
             ax.clear()
             if j < len(historiales[i]):
-                estado_actual = historiales[i][j]
-                # 1) Mostrar maximal elegido
-                seleccion = max_aplicados[i][j]
-                if seleccion:
-                    texto_max = format_maximal(seleccion)
+                est = historiales[i][j]
+                sel = max_aplicados[i][j]
+                # Mostrar maximal aplicado
+                if sel:
+                    txt = format_maximal(sel)
                     ax.text(
-                        0.5, 0.92, texto_max,
+                        0.5, 0.92,
+                        txt,
                         ha='center', va='center',
                         transform=ax.transAxes,
                         fontsize=10,
                         bbox=dict(facecolor='white', alpha=0.8, boxstyle='round')
                     )
-                # 2) Mostrar candidatos generados
-                texto_candidatos = 'Maximales generados:'
-                for m in estado_actual.skin.values():
-                    rec_disp = deepcopy(m.resources)
-                    aplicables = [r for r in m.reglas if max_applications(rec_disp, r) > 0]
-                    if aplicables:
-                        prio_max = max(r.priority for r in aplicables)
-                        reglas_top = [r for r in aplicables if r.priority == prio_max]
-                        combos = generar_maximales(reglas_top, rec_disp)
-                        reps = []
+                # Mostrar candidatos generados (texto ajustado en varias líneas)
+                texto_cand = 'Maximales generados:'
+                for m in est.skin.values():
+                    rec = deepcopy(m.resources)
+                    aplic = [r for r in m.reglas if max_applications(rec, r) > 0]
+                    if aplic:
+                        prio = max(r.priority for r in aplic)
+                        top = [r for r in aplic if r.priority == prio]
+                        combos = generar_maximales(top, rec)
+                        rep: List[str] = []
                         for combo in combos:
                             elems: List[str] = []
-                            for regla, veces in combo:
+                            for regla, cnt in combo:
                                 idx_r = m.reglas.index(regla) + 1
-                                elems += [f'r{idx_r}'] * veces
-                            reps.append('{' + ','.join(elems) + '}')
-                        texto_candidatos += f' {m.id_mem}: ' + ','.join(reps)
+                                elems += [f'r{idx_r}'] * cnt
+                            rep.append('{' + ','.join(elems) + '}')
+                        texto_cand += f' {m.id_mem}: ' + ','.join(rep)
+                # Ajustar líneas para no salirse de la figura
+                wrapped = textwrap.fill(texto_cand, width=40)
                 ax.text(
-                    0.02, 0.02, texto_candidatos,
+                    0.02, 0.05,
+                    wrapped,
                     transform=ax.transAxes,
                     fontsize=8,
                     verticalalignment='bottom',
                     bbox=dict(facecolor='white', alpha=0.5)
                 )
-                # 3) Dibujar membranas de nivel superior
-                tops = obtener_membranas_top(estado_actual)
-                num_tops = len(tops)
-                if num_tops > 0:
+                # Dibujar membranas de nivel superior
+                tops = obtener_membranas_top(est)
+                numt = len(tops)
+                if numt:
                     for k, m in enumerate(tops):
-                        x_base = k * (0.7 / num_tops)
-                        y_base = 0.2
-                        ancho = (0.7 / num_tops) - 0.02
-                        alto = 0.7
-                        dibujar_membrana(
-                            ax,
-                            m,
-                            estado_actual,
-                            x_base,
-                            y_base,
-                            ancho,
-                            alto
-                        )
-                # 4) Dibujar reglas dentro del subplot
+                        xb = k*(0.7/numt)
+                        yb = 0.2
+                        w = (0.7/numt)-0.02
+                        h = 0.7
+                        dibujar_membrana(ax, m, est, xb, yb, w, h)
+                # Dibujar reglas dentro del subplot, subido en Y para no interferir
                 lineas: List[str] = []
-                for m in estado_actual.skin.values():
+                for m in est.skin.values():
                     for r in m.reglas:
-                        consumo = ','.join(f"{k}:{v}" for k,v in r.left.items())
-                        produccion = ','.join(f"{k}:{v}" for k,v in r.right.items())
-                        crea = f" crea={r.create_membranes}" if r.create_membranes else ''
-                        dis = f" disuelve={r.dissolve_membranes}" if r.dissolve_membranes else ''
-                        lineas.append(f"{m.id_mem}: {consumo}->{produccion} (Pri={r.priority}){crea}{dis}")
+                        c = ','.join(f"{k}:{v}" for k,v in r.left.items())
+                        p = ','.join(f"{k}:{v}" for k,v in r.right.items())
+                        cr = f" crea={r.create_membranes}" if r.create_membranes else ''
+                        ds = f" disuelve={r.dissolve_membranes}" if r.dissolve_membranes else ''
+                        lineas.append(f"{m.id_mem}: {c}->{p} (Pri={r.priority}){cr}{ds}")
+                reglas_text = 'Reglas:\n' + '\n'.join(lineas)
                 ax.text(
-                    0.78, 0.1,
-                    'Reglas:\n' + '\n'.join(lineas),
+                    0.78, 0.3,
+                    reglas_text,
                     transform=ax.transAxes,
                     fontsize=6,
-                    verticalalignment='bottom',
+                    verticalalignment='top',
                     bbox=dict(facecolor='wheat', alpha=0.7)
                 )
                 ax.set_title(f'Sistema {j+1}')
             else:
                 ax.axis('off')
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        # Forzar redibujo interactivo
         fig.canvas.draw_idle()
 
     def on_key_varios(event) -> None:
         nonlocal idx
-        if event.key == 'right':
-            if idx < pasos:
-                if idx == len(historiales) - 1:
-                    nuevos = [deepcopy(historiales[-1][k]) for k in range(len(sistemas))]
-                    sel_line: List[Optional[Dict[str, List[Tuple[Regla,int]]]]] = []
-                    for k, sis in enumerate(nuevos):
-                        seed = None if rng_seed is None else rng_seed + k + len(historiales)
-                        lap = simular_lapso(sis, modo=modo, rng_seed=seed)
-                        sel_line.append(lap.seleccionados)
-                    historiales.append(nuevos)
-                    max_aplicados.append(sel_line)
-                idx += 1
-                dibujar_estado_varios(idx)
+        if event.key == 'right' and idx < pasos:
+            if idx == len(historiales) - 1:
+                nuevos = [deepcopy(historiales[-1][k]) for k in range(len(sistemas))]
+                sel_line: List[Optional[Dict[str,List[Tuple[Regla,int]]]]]=[]
+                for k, sis in enumerate(nuevos):
+                    seed = None if rng_seed is None else rng_seed + k + len(historiales)
+                    lap = simular_lapso(sis, modo=modo, rng_seed=seed)
+                    sel_line.append(lap.seleccionados)
+                historiales.append(nuevos)
+                max_aplicados.append(sel_line)
+            idx += 1
+            dibujar_estado_varios(idx)
         elif event.key == 'left' and idx > 0:
             idx -= 1
             dibujar_estado_varios(idx)
