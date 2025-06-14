@@ -11,7 +11,7 @@ from matplotlib.patches import Rectangle
 from typing import List, Dict, Optional, Tuple
 import math
 
-from SistemaP import (
+from .SistemaP import (
     SistemaP,
     Membrana,
     Regla,
@@ -163,7 +163,7 @@ def format_maximal(
 def simular_y_visualizar(
     sistema: SistemaP,
     pasos: int = 5,
-    modo: str = "max_paralelo",
+    #modo: str = "max_paralelo",
     rng_seed: Optional[int] = None
 ) -> None:
     """
@@ -176,6 +176,7 @@ def simular_y_visualizar(
         pasos: número máximo de pasos que se pueden generar.
         modo: modo de simulación ("max_paralelo" o "secuencial").
     """
+    modo = "max_paralelo"  # Modo por defecto Y UNICO AHORA MISMO
     historial: List[SistemaP] = [deepcopy(sistema)]
     max_aplicados: List[Optional[Dict[str, List[Tuple[Regla, int]]]]] = [None]
     idx = 0
@@ -292,7 +293,7 @@ def simular_y_visualizar(
 def simular_varios_y_visualizar(
     sistemas: List[SistemaP],
     pasos: int = 5,
-    modo: str = 'max_paralelo',
+    #modo: str = 'max_paralelo',
     rng_seed: Optional[int] = None
 ) -> None:
     '''
@@ -300,6 +301,8 @@ def simular_varios_y_visualizar(
     Parámetros idénticos a simular_y_visualizar, pero recibe una lista de sistemas.
     Navegación con flechas izquierda/derecha para retroceder y avanzar pasos.
     '''
+    modo = "max_paralelo"  # Modo por defecto Y UNICO AHORA MISMO
+
     import textwrap  # para ajustar texto largo
     # Validar que todos los elementos sean instancias de SistemaP
     for idx_s, sis in enumerate(sistemas):

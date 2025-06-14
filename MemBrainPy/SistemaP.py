@@ -202,7 +202,7 @@ def generar_maximales(
 
 def simular_lapso(
     sistema: SistemaP,
-    modo: str = "max_paralelo",
+    #modo: str = "max_paralelo",
     rng_seed: Optional[int] = None
 ) -> LapsoResult:
     """
@@ -223,6 +223,10 @@ def simular_lapso(
           - created: lista de (id_padre, id_nueva) creadas.
           - dissolved: lista de IDs disueltas.
     """
+
+    modo = "max_paralelo"  # Modo por defecto Y UNICO AHORA MISMO 
+
+
     # Crear un RNG local; si rng_seed es None, se inicializa de forma no determinista
     rng = random.Random(rng_seed)
 
@@ -336,7 +340,7 @@ def simular_lapso(
 def registrar_estadisticas(
     sistema: SistemaP,
     lapsos: int,
-    modo: str = "max_paralelo",
+    #modo: str = "max_paralelo",
     rng_seed: Optional[int] = None,
     csv_path: Optional[str] = None
 ) -> pd.DataFrame:
@@ -364,6 +368,8 @@ def registrar_estadisticas(
     Returns:
         pd.DataFrame con las estadísticas detalladas por lapso y membrana.
     """
+    modo = "max_paralelo"  # Modo por defecto Y UNICO AHORA MISMO
+
     all_results: List[LapsoResult] = []
     for i in range(lapsos):
         seed = None

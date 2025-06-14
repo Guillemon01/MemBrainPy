@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import re
-from SistemaP import SistemaP, Membrana, Regla
+from .SistemaP import SistemaP, Membrana, Regla
 
 class ConfiguradorPSistema(tk.Tk):
     def __init__(self):
