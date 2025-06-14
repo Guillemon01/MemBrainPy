@@ -7,6 +7,10 @@ import funciones
 import operaciones_avanzadas
 
 sistemas_list = [tests_sistemas.sistema_basico(),
+                 tests_sistemas.sistema_basico(),
+                 tests_sistemas.sistema_basico(),
+                 tests_sistemas.sistema_basico(),
+                 tests_sistemas.sistema_basico(),
                  tests_sistemas.sistema_con_conflictos(),
 ]
 

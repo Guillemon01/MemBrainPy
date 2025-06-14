@@ -398,6 +398,8 @@ def simular_varios_y_visualizar(
             else:
                 ax.axis('off')
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+        # Forzar redibujo interactivo
+        fig.canvas.draw_idle()
 
     def on_key_varios(event) -> None:
         nonlocal idx
