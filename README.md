@@ -1,83 +1,134 @@
-# Libreria_membranas
+````markdown
+# MemBrainPy: Biblioteca de Sistemas P en Python
 
-Libreria_membranas es un pequeño proyecto educativo que implementa un simulador
-para **Sistemas P**, un modelo de computación inspirado en el funcionamiento de
-las membranas celulares. El código está escrito en Python e incluye varios
-módulos que permiten crear sistemas de membranas de manera programática, leer
-archivos en formato P‑Lingua y ejecutar simulaciones paso a paso.
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
-## Características principales
+MemBrainPy es una librería en Python que implementa y simula **Sistemas P** (P‐systems) en modo máx-paralelo, basados en el formalismo de P-Lingua. Permite:
 
-- **Simulación en modo máximo paralelo** mediante el módulo `SistemaP`, que se
-  encarga de aplicar reglas, crear y disolver membranas y registrar el estado
-de cada lapso de tiempo.
-- **Lectura de sistemas** a partir de ficheros `.pli` con el módulo `Lector`.
-- **Colección de funciones básicas** (`funciones.py`) para operaciones como
-  división, suma, resta o paridad, construidas con reglas de membranas.
-- **Operaciones compuestas** (`operaciones_avanzadas.py`) que reutilizan las
-  funciones básicas para multiplicar o calcular potencias.
-- **Visualización** interactiva de las simulaciones (en `visualizadorAvanzado`).
-- **Pruebas automatizadas** en `tests/` para asegurar el correcto
-  funcionamiento de las operaciones avanzadas.
+- Definir estructuras jerárquicas de membranas y multiconjuntos de objetos.  
+- Especificar reglas de evolución, comunicación, disolución y creación de membranas.  
+- Cargar definiciones en formato `.pli` con el módulo de lectura  
+  (`Lector.py`).  
+- Simular lapso a lapso y registrar estadísticas en tablas y CSV.  
+- Visualizar dinámicamente la simulación con Matplotlib.  
+- Generar ejemplos de sistemas P estándar (suma, resta, división…)  
+  mediante funciones de conveniencia.
 
-## Instalación
+---
 
-El proyecto puede instalarse a partir del repositorio clonándolo de GitHub y
-asegurándose de tener las dependencias necesarias. Únicamente se requiere
-`pandas` para registrar estadísticas:
+## 📥 Instalación
+
+Instala MemBrainPy con pip:
 
 ```bash
-pip install pandas
-```
+pip install membrainpy
+````
 
-A continuación se puede ejecutar `pytest` para lanzar las pruebas incluidas:
+O clona el repositorio y, desde la raíz del proyecto:
 
 ```bash
-python -m pytest -q
+git clone https://github.com/tu-usuario/membrainpy.git
+cd membrainpy
+pip install .
 ```
 
-## Uso básico
+---
 
-El punto de entrada se encuentra en `MemBrainPy/__init__.py`. Al ejecutar ese
-script se crea un sistema de ejemplo (por defecto, una división) y se simula
-durante varios lapsos registrando estadísticas en `./MemBrainPy/Estadisticas`.
-Para probar otros sistemas basta con modificar las variables definidas en
-`main()`.
-
-También pueden construirse sistemas manualmente utilizando las funciones de
-`funciones.py` o leyendo archivos `.pli` mediante `Lector.leer_sistema`.
-Una vez obtenido un objeto `SistemaP`, la función `simular_lapso` permite
-avanzar la simulación.
+## 🚀 Primeros pasos
 
 ```python
-from SistemaP import simular_lapso
-import funciones
+from membrainpy.SistemaP import SistemaP, Membrana, Regla, simular_lapso
 
-sistema = funciones.suma(2, 3)
-for _ in range(5):
-    simular_lapso(sistema, modo="max_paralelo")
-print(sistema.skin["m_out"].resources)
+# 1. Crear un sistema vacío y definir la membrana piel
+sis = SistemaP(output_membrane="skin")
+m0 = Membrana("skin", resources={})
+sis.add_membrane(m0)
+
+# 2. Añadir una membrana hija con recursos y reglas
+m1 = Membrana("m1", resources={"a": 5, "b": 3})
+# Regla: consume 2·a → produce 1·c en la piel
+r = Regla(left={"a":2}, right={"c_out":1}, priority=1)
+m1.add_regla(r)
+sis.add_membrane(m1, parent_id="skin")
+
+# 3. Simular un lapso
+lap = simular_lapso(sis, rng_seed=42)
+print("Recursos tras consumo:", lap.consumos)
+print("Producciones:", lap.producciones)
 ```
 
-## Organización del repositorio
+---
+
+## 📦 Estructura de módulos
+
+* **`SistemaP.py`**
+  Núcleo de clases: `SistemaP`, `Membrana`, `Regla`, simulador por lapso, generación de máximales, estadísticas y exportación a DataFrame/CSV.
+* **`Lector.py`**
+  Parser de archivos P-Lingua (`.pli`): lee jerarquía (`@mu`), multiconjuntos (`@ms(id)`), reglas y construye un `SistemaP`.
+* **`funciones.py`**
+  Fábrica de sistemas P elementales para operaciones aritméticas (suma, resta, división, paridad, etc.).
+* **`operaciones_avanzadas.py`**
+  Multiplicación y potencia mediante simulaciones sucesivas de sistemas P básicos.
+* **`visualizadorAvanzado.py`**
+  Visualización paso a paso de la simulación con Matplotlib: dibuja estructuras, recursos y reglas aplicadas.
+* **`configurador.py`**
+  Interfaz gráfica (Tkinter) para construir interactivamente un Sistema P: añadir membranas, recursos, reglas y definir membrana de salida.
+* **`tests_sistemas.py`**
+  Suite de tests tipo `unittest` que cubre sistemas básicos, anidados, con conflictos y casos de uso avanzados.
+
+---
+
+## 📖 Ejemplo de uso con P-Lingua
+
+```python
+from membrainpy.Lector import leer_sistema
+
+# Suponiendo un archivo ejemplo.pli en el disco
+sis = leer_sistema("ejemplo.pli")
+
+# Simular 10 pasos y exportar estadísticas
+from membrainpy.SistemaP import registrar_estadisticas
+df = registrar_estadisticas(sis, lapsos=10, rng_seed=0, csv_path="resultados.csv")
+print(df.head())
+```
+
+---
+
+## 🔧 Testing
+
+Ejecuta la batería de tests con:
+
+```bash
+pytest
+```
+
+O bien:
+
+```bash
+python -m unittest discover -v
+```
+
+---
+
+## 🤝 Contribuir
+
+1. Haz un *fork* del proyecto y crea una rama (`git checkout -b feature/nueva-función`).
+2. Añade tests en `tests_sistemas.py` y asegúrate de que pasan todos.
+3. Abre un *pull request* describiendo tu contribución.
+
+---
+
+## 📚 Referencias
+
+* Pérez-Hurtado et al. (2009). *Un entorno de programación para Membrane Computing (P-Lingua)* fileciteturn0file7
+* Sempere, J. M. (s.f.). *Computación con membranas. Sistemas P* fileciteturn0file8
+* Gh. Păun (2002). *Membrane Computing. An Introduction.* Springer.
+
+---
+
+## 📝 Licencia
+
+Este proyecto está bajo licencia **MIT**. Véase el archivo [LICENSE](LICENSE) para más detalles.
 
 ```
-MemBrainPy/
-├── MemBrainPy/              # Código fuente de la librería
-│   ├── SistemaP.py          # Núcleo del simulador de Sistemas P
-│   ├── Lector.py            # Parser de archivos P-Lingua (.pli)
-│   ├── funciones.py         # Funciones básicas de aritmética con membranas
-│   ├── operaciones_avanzadas.py  # Operaciones compuestas (multiplicar, potencia)
-│   └── visualizadorAvanzado.py   # Herramientas de visualización
-├── tests/                   # Conjunto de pruebas con pytest
-└── setup.py                 # Metadatos y configuración de instalación
 ```
-
-El archivo `Estadisticas/estadisticas.csv` se genera automáticamente cuando se
-registran simulaciones; no es necesario modificarlo manualmente.
-
-## Estado del proyecto
-
-Este repositorio se creó con fines académicos y de experimentación, por lo que
-puede ampliarse o modificarse según las necesidades. Las contribuciones y
-sugerencias son bienvenidas.

@@ -6,8 +6,6 @@ MemBrainPy/__init__.py
 MemBrainPy/configurador.py
 MemBrainPy/funciones.py
 MemBrainPy/operaciones_avanzadas.py
-MemBrainPy/pruebas.py
-MemBrainPy/pruebas2.py
 MemBrainPy/tests_sistemas.py
 MemBrainPy/visualizadorAvanzado.py
 MemBrainPy.egg-info/PKG-INFO
