@@ -404,3 +404,53 @@ def registrar_estadisticas(
         # Imprimir CSV por consola
         print(df.to_csv(index=False))
     return df
+
+def merge_systems(*systems: SistemaP, global_id: str = "global", output_membrane: Optional[str] = None) -> SistemaP:
+    """
+    Fusiona varios SistemasP en un único SistemaP con una membrana global.
+    - systems: uno o varios SistemasP a fusionar (pasados como argumentos separados).
+    - global_id: identificador de la nueva membrana piel.
+    - output_membrane: opcional, ID de membrana de salida en el sistema resultante.
+
+    La membrana global contendrá como hijas las antiguas membranas piel de cada sistema,
+    preservando sus contenidos, reglas y subestructuras.
+    """
+    # Instanciar sistema resultante
+    merged = SistemaP()
+    # Crear y añadir membrana piel global
+    global_mem = Membrana(id_mem=global_id, resources={}, reglas=[], children=[], parent=None)
+    merged.add_membrane(global_mem)
+
+    # Recorrer cada sistema a fusionar
+    for idx, sys in enumerate(systems):
+        # Mapeo de IDs antiguos a nuevos para evitar colisiones
+        mapping: Dict[str, str] = {}
+        for old_id in sys.skin:
+            mapping[old_id] = f"{global_id}_{idx}_{old_id}"
+        # Copiar membranas al sistema fusionado
+        for old_id, membrana in sys.skin.items():
+            new_id = mapping[old_id]
+            new_mem = Membrana(
+                id_mem=new_id,
+                resources=deepcopy(membrana.resources),
+                reglas=[deepcopy(r) for r in membrana.reglas],
+                children=[],
+                parent=None
+            )
+            # Añadir sin asignar padre todavía
+            merged.skin[new_id] = new_mem
+        # Reconstruir jerarquía padre-hijo
+        for old_id, membrana in sys.skin.items():
+            new_id = mapping[old_id]
+            old_parent = membrana.parent
+            if old_parent is None:
+                parent_id = global_id
+            else:
+                parent_id = mapping.get(old_parent, global_id)
+            merged.add_membrane(merged.skin[new_id], parent_id)
+
+    # Definir membrana de salida si se especifica
+    if output_membrane:
+        merged.output_membrane = output_membrane
+
+    return merged
