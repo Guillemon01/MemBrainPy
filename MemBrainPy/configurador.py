@@ -9,6 +9,7 @@ class ConfiguradorPSistema(tk.Tk):
         self.title("Configurador de Sistema P")
         self.geometry("900x600")
         self.configure(bg="#f0f0f0")
+        # Estilos
         self.style = ttk.Style(self)
         self.style.theme_use('clam')
         self.style.configure('TFrame', background='#f0f0f0')
@@ -20,7 +21,17 @@ class ConfiguradorPSistema(tk.Tk):
         self.system = SistemaP()
         self.selected_membrane = None
         self.mem_counter = 1
+        self.saved = False  # bandera para saber si guardó
+
+        # Manejar cierre de ventana
+        self.protocol('WM_DELETE_WINDOW', self._on_close)
+
         self._construir_interfaz()
+
+    def _on_close(self):
+        # Si cierra sin guardar, marcamos sin guardar y destruimos
+        self.saved = False
+        self.destroy()
 
     def _construir_interfaz(self):
         cont = ttk.Frame(self)
@@ -40,54 +51,58 @@ class ConfiguradorPSistema(tk.Tk):
         self.tree.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
         # Panel derecho: recursos + reglas definition
-        right_frame = ttk.LabelFrame(cont, text='Recursos y Definición de Reglas')
-        right_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
-        for i in range(3): right_frame.columnconfigure(i, weight=1)
+        right = ttk.LabelFrame(cont, text='Recursos y Definición de Reglas')
+        right.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
+        for i in range(3): right.columnconfigure(i, weight=1)
 
         # Recursos
-        ttk.Label(right_frame, text='Símbolos (letras):').grid(row=0, column=0, padx=5, pady=5, sticky='e')
-        self.entry_simbolo = ttk.Entry(right_frame)
-        self.entry_simbolo.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
-        ttk.Button(right_frame, text='Añadir recurso', command=self.agregar_recurso).grid(row=0, column=2, padx=5)
-        self.lista_recursos = tk.Listbox(right_frame, height=5, font=('Consolas',10))
+        ttk.Label(right, text='Símbolos (letras):').grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.entry_simbolo = ttk.Entry(right)
+        self.entry_simbolo.grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+        ttk.Button(right, text='Añadir recurso', command=self.agregar_recurso).grid(row=0, column=2, padx=5)
+        self.lista_recursos = tk.Listbox(right, height=5, font=('Consolas',10))
         self.lista_recursos.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=5)
 
         # Separador
-        ttk.Separator(right_frame, orient='horizontal').grid(row=2, column=0, columnspan=3, sticky='ew', pady=10)
+        ttk.Separator(right, orient='horizontal').grid(row=2, column=0, columnspan=3, sticky='ew', pady=10)
 
-        # Definir regla
-        ttk.Label(right_frame, text='Consumir*:').grid(row=3, column=0, padx=5, pady=2, sticky='e')
-        self.entry_izq = ttk.Entry(right_frame)
-        self.entry_izq.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
-        ttk.Label(right_frame, text='Producir:').grid(row=4, column=0, padx=5, pady=2, sticky='e')
-        self.entry_der = ttk.Entry(right_frame)
-        self.entry_der.grid(row=4, column=1, padx=5, pady=2, sticky='ew')
-        ttk.Label(right_frame, text='Prioridad:').grid(row=5, column=0, padx=5, pady=2, sticky='e')
+        # Definición de regla
+        ttk.Label(right, text='Consumir*:').grid(row=3, column=0, sticky='e', padx=5, pady=2)
+        self.entry_izq = ttk.Entry(right)
+        self.entry_izq.grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Label(right, text='Producir:').grid(row=4, column=0, sticky='e', padx=5, pady=2)
+        self.entry_der = ttk.Entry(right)
+        self.entry_der.grid(row=4, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Label(right, text='Prioridad:').grid(row=5, column=0, sticky='e', padx=5, pady=2)
         vcmd = (self.register(self._validate_entero), '%P')
-        self.entry_prioridad = ttk.Entry(right_frame, validate='key', validatecommand=vcmd)
-        self.entry_prioridad.insert(0,'1')
-        self.entry_prioridad.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
+        self.entry_prioridad = ttk.Entry(right, validate='key', validatecommand=vcmd)
+        self.entry_prioridad.insert(0, '1')
+        self.entry_prioridad.grid(row=5, column=1, sticky='ew', padx=5, pady=2)
 
         # Opciones de regla
         self.var_disolver = tk.BooleanVar()
         self.var_crear = tk.BooleanVar()
-        ttk.Checkbutton(right_frame, text='Disolver membrana', variable=self.var_disolver,
-                        command=self._toggle_options).grid(row=6, column=0, padx=5, pady=2, sticky='w')
-        ttk.Checkbutton(right_frame, text='Crear membrana', variable=self.var_crear,
-                        command=self._toggle_options).grid(row=7, column=0, padx=5, pady=2, sticky='w')
-        ttk.Label(right_frame, text='ID destino:').grid(row=7, column=1, padx=5, sticky='e')
-        self.entry_crear = ttk.Entry(right_frame, width=5, state='disabled')
-        self.entry_crear.grid(row=7, column=2, padx=5, sticky='w')
-        ttk.Button(right_frame, text='Añadir regla', command=self.agregar_regla).grid(row=8, column=0, columnspan=3, pady=10)
+        ttk.Checkbutton(right, text='Disolver membrana', variable=self.var_disolver,
+                        command=self._toggle_options).grid(row=6, column=0, sticky='w', padx=5, pady=2)
+        ttk.Checkbutton(right, text='Crear membrana', variable=self.var_crear,
+                        command=self._toggle_options).grid(row=7, column=0, sticky='w', padx=5, pady=2)
+        ttk.Label(right, text='ID destino:').grid(row=7, column=1, sticky='e', padx=5)
+        self.entry_crear = ttk.Entry(right, width=5, state='disabled')
+        self.entry_crear.grid(row=7, column=2, sticky='w', padx=5)
 
-        # Lista de reglas para la membrana seleccionada
+        # Botón y estado
+        ttk.Button(right, text='Añadir regla', command=self.agregar_regla).grid(row=8, column=0, columnspan=3, pady=10)
+        self.lbl_status = ttk.Label(right, text='', font=('Arial', 9, 'italic'))
+        self.lbl_status.grid(row=9, column=0, columnspan=3, pady=(0,10))
+
+        # Lista de reglas
         reglas_frame = ttk.LabelFrame(cont, text='Reglas de la Membrana Seleccionada')
         reglas_frame.grid(row=1, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
         reglas_frame.columnconfigure(0, weight=1)
         self.lista_reglas = tk.Listbox(reglas_frame, height=6, font=('Consolas',10))
         self.lista_reglas.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
-        # Panel inferior: añadir membrana y guardar
+        # Panel inferior: agregar membrana y guardar
         bottom = ttk.Frame(self)
         bottom.pack(fill='x', pady=5)
         ttk.Label(bottom, text='ID Padre para nueva membrana:').pack(side='left', padx=5)
@@ -102,7 +117,7 @@ class ConfiguradorPSistema(tk.Tk):
         self.tree.insert('', 'end', str(self.mem_counter), text=self._texto_membrana(piel))
 
     def _validate_entero(self, v):
-        return v.isdigit() or v==' '
+        return v.isdigit() or v == ''
 
     def _toggle_options(self):
         if self.var_disolver.get():
@@ -135,8 +150,27 @@ class ConfiguradorPSistema(tk.Tk):
 
     def _actualizar_reglas(self):
         self.lista_reglas.delete(0, 'end')
+        # Formatear cada regla para mostrar detalles
         for r in self.selected_membrane.reglas:
-            self.lista_reglas.insert('end', repr(r))
+            parts = []
+            # Consumir
+            consumir = ' '.join(f"{sym}×{cnt}" for sym,cnt in r.left.items())
+            parts.append(f"Consumir: {consumir}")
+            # Producir
+            if r.right:
+                producir = ' '.join(f"{sym}×{cnt}" for sym,cnt in r.right.items())
+                parts.append(f"Producir: {producir}")
+            # Prioridad
+            parts.append(f"Prioridad: {r.priority}")
+            # Disolver
+            if getattr(r, 'dissolve_membranes', []):
+                parts.append(f"Disuelve: {', '.join(r.dissolve_membranes)}")
+            # Crear
+            if getattr(r, 'create_membranes', []):
+                parts.append(f"Crea: {', '.join(r.create_membranes)}")
+            # Juntar y mostrar
+            texto = ' | '.join(parts)
+            self.lista_reglas.insert('end', texto)
 
     def agregar_membrana(self):
         pid = self.entry_padre.get().strip()
@@ -193,7 +227,8 @@ class ConfiguradorPSistema(tk.Tk):
                 return
             regla.create_membranes = [tgt]
         self.selected_membrane.add_regla(regla)
-        self.lbl_status.config(text=f'Regla con prio {prio} añadida', foreground='green')
+        # Confirmación
+        self.lbl_status.config(text=f'Regla añadida correctamente', foreground='green')
         self._actualizar_reglas()
         for e in (self.entry_izq, self.entry_der, self.entry_prioridad):
             e.delete(0, 'end')
@@ -204,13 +239,15 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_crear.configure(state='disabled')
 
     def on_save(self):
+        # Guardar y cerrar
+        self.saved = True
         self.destroy()
 
 
 def configurar_sistema_p():
     app = ConfiguradorPSistema()
     app.mainloop()
-    return app.system
+    return app.system if app.saved else None
 
 if __name__ == '__main__':
     sistema = configurar_sistema_p()

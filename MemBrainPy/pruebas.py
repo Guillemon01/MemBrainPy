@@ -22,4 +22,5 @@ sistema = configurador.configurar_sistema_p()
 # Si tu función visualizadora sólo necesita la lista de instancias, sin nombre:
 # sistemas_list = [constructor() for constructor in sistemas_dict.values()]
 # Llamada final
-visualizadorAvanzado.simular_y_visualizar(sistema)
+if sistema is not None:
+    visualizadorAvanzado.simular_y_visualizar(sistema)
