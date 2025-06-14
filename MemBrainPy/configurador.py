@@ -35,7 +35,7 @@ class ConfiguradorPSistema(tk.Tk):
 
     def _construir_interfaz(self):
         cont = ttk.Frame(self)
-        cont.pack(fill='both', expand=True, padx=10, pady=10)
+        cont.pack(side='top', fill='both', expand=True, padx=10, pady=10)
         cont.columnconfigure(0, weight=2)
         cont.columnconfigure(1, weight=1)
         cont.rowconfigure(0, weight=1)
@@ -96,14 +96,14 @@ class ConfiguradorPSistema(tk.Tk):
 
         # Lista de reglas
         reglas_frame = ttk.LabelFrame(cont, text='Reglas de la Membrana Seleccionada')
-        reglas_frame.grid(row=2, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
+        reglas_frame.grid(row=1, column=0, columnspan=1, sticky='nsew', padx=5, pady=5)
         reglas_frame.columnconfigure(0, weight=1)
         self.lista_reglas = tk.Listbox(reglas_frame, height=6, font=('Consolas',10))
         self.lista_reglas.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
         # Panel inferior: agregar membrana y guardar
         bottom = ttk.Frame(self)
-        bottom.pack(fill='x', pady=5)
+        bottom.pack(side='bottom', fill='x', padx=10, pady=5)
         ttk.Label(bottom, text='ID Padre para nueva membrana:').pack(side='left', padx=5)
         self.entry_padre = ttk.Entry(bottom, width=5)
         self.entry_padre.pack(side='left')
