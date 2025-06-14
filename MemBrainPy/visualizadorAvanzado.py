@@ -276,7 +276,7 @@ def simular_y_visualizar(
         if event.key == "right" and idx < pasos:
             if idx == len(historial) - 1:
                 copia = deepcopy(historial[idx])
-                lapso_res: LapsoResult = simular_lapso(copia, modo=modo, rng_seed=rng_seed)
+                lapso_res: LapsoResult = simular_lapso(copia, rng_seed=rng_seed)
                 historial.append(copia)
                 max_aplicados.append(lapso_res.seleccionados)
             idx += 1

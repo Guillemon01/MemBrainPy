@@ -6,6 +6,6 @@ from .visualizadorAvanzado import simular_y_visualizar
 
 __all__ = [
     "SistemaP", "Membrana", "Regla",
-    "simular_y_visualizar",
+    "simular_y_visualizar", "configurar_sistema_p", "simular_varios_y_visualizar",
     # …
 ]

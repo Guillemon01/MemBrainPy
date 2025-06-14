@@ -87,21 +87,6 @@ def sistema_con_conflictos(recursos: dict = None) -> SistemaP:
     return sistema
 
 
-def sistema_demo_max_paralelo() -> SistemaP:
-    sistema = SistemaP()
-    # Configuración determinística para asegurar múltiples maximales
-    recursos = {'a': 3, 'b': 1}
-    m1 = Membrana('m1', recursos)
-    # Maximales posibles:
-    #  - Ejecutar R1 una vez (consume 2a+1b)
-    #  - Ejecutar R2 tres veces (consume 3a)
-    #  - Ejecutar R2 una vez y luego R1 una vez (consume 3a+1b)
-    m1.add_regla(Regla({'a': 2, 'b': 1}, {'c': 1}, priority=2))
-    m1.add_regla(Regla({'a': 1}, {'d': 2}, priority=2))
-    sistema.add_membrane(m1)
-    return sistema
-
-
 def Sistema_complejo(recursos: dict = None, tipo: str = None, complejidad: int = None) -> SistemaP:
     """
     Crea un sistema P en el que se asegura la ejecución de al menos una regla de creación o disolución.

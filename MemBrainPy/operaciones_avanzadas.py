@@ -6,7 +6,7 @@ complejos. Cada operación ejecuta internamente sistemas P creados por las
 funciones básicas y devuelve el resultado numérico correspondiente.
 """
 
-from SistemaP import simular_lapso
+from .SistemaP import simular_lapso
 import funciones
 
 

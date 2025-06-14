@@ -6,7 +6,7 @@ Utilizan el módulo 'SistemaP' para construir la estructura de membranas y regla
 """
 
 from typing import Dict
-from SistemaP import SistemaP, Membrana, Regla
+from .SistemaP import SistemaP, Membrana, Regla
 
 
 def division(n: int, divisor: int) -> SistemaP:
