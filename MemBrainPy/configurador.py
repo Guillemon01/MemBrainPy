@@ -7,86 +7,104 @@ class ConfiguradorPSistema(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Configurador de Sistema P")
+        self.geometry("900x600")
+        self.configure(bg="#f0f0f0")
+        self.style = ttk.Style(self)
+        self.style.theme_use('clam')
+        self.style.configure('TFrame', background='#f0f0f0')
+        self.style.configure('TLabelFrame', background='#e8e8e8', font=('Arial', 10, 'bold'))
+        self.style.configure('TLabel', background='#f0f0f0', font=('Arial', 9))
+        self.style.configure('TButton', font=('Arial', 9))
+        self.style.configure('Treeview', font=('Consolas', 10), rowheight=24)
+
         self.system = SistemaP()
         self.selected_membrane = None
         self.mem_counter = 1
         self._construir_interfaz()
 
     def _construir_interfaz(self):
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=2)
+        cont = ttk.Frame(self)
+        cont.pack(fill='both', expand=True, padx=10, pady=10)
+        cont.columnconfigure(0, weight=2)
+        cont.columnconfigure(1, weight=1)
+        cont.rowconfigure(0, weight=1)
 
         # Árbol de membranas
-        self.tree = ttk.Treeview(self)
+        tree_frame = ttk.LabelFrame(cont, text='Estructura de Membranas')
+        tree_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+        tree_frame.rowconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
+        self.tree = ttk.Treeview(tree_frame)
         self.tree.heading('#0', text='Membranas')
         self.tree.bind('<<TreeviewSelect>>', self.on_select)
-        self.tree.grid(row=0, column=0, rowspan=8, sticky='nsew', padx=5, pady=5)
+        self.tree.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
-        # Panel de creación de membrana genérica
-        btn_frame = ttk.Frame(self)
-        btn_frame.grid(row=0, column=1, sticky='ew', padx=5, pady=5)
-        btn_agregar_mem = ttk.Button(btn_frame, text='Agregar Membrana', command=self.agregar_membrana)
-        btn_agregar_mem.pack(side='left', padx=5)
-        ttk.Label(btn_frame, text='Padre ID:').pack(side='left')
-        self.entry_padre = ttk.Entry(btn_frame, width=5)
-        self.entry_padre.pack(side='left', padx=2)
-        btn_crear_padre = ttk.Button(btn_frame, text='Crear en Padre', command=self.crear_en_padre)
-        btn_crear_padre.pack(side='left', padx=5)
+        # Panel derecho: recursos + reglas definition
+        right_frame = ttk.LabelFrame(cont, text='Recursos y Definición de Reglas')
+        right_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
+        for i in range(3): right_frame.columnconfigure(i, weight=1)
 
-        # Sección recursos
-        res_frame = ttk.LabelFrame(self, text='Agregar Recurso')
-        res_frame.grid(row=1, column=1, sticky='ew', padx=5, pady=5)
-        self.entry_simbolo = ttk.Entry(res_frame)
-        self.entry_simbolo.grid(row=0, column=0, padx=5, pady=5)
-        btn_agregar_recurso = ttk.Button(res_frame, text='Agregar a Membrana', command=self.agregar_recurso)
-        btn_agregar_recurso.grid(row=0, column=1, padx=5, pady=5)
-        self.lista_recursos = tk.Listbox(res_frame, height=4)
-        self.lista_recursos.grid(row=1, column=0, columnspan=2, sticky='ew', padx=5, pady=5)
+        # Recursos
+        ttk.Label(right_frame, text='Símbolos (letras):').grid(row=0, column=0, padx=5, pady=5, sticky='e')
+        self.entry_simbolo = ttk.Entry(right_frame)
+        self.entry_simbolo.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
+        ttk.Button(right_frame, text='Añadir recurso', command=self.agregar_recurso).grid(row=0, column=2, padx=5)
+        self.lista_recursos = tk.Listbox(right_frame, height=5, font=('Consolas',10))
+        self.lista_recursos.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=5)
 
-        # Sección reglas
-        regla_frame = ttk.LabelFrame(self, text='Definir Regla')
-        regla_frame.grid(row=2, column=1, sticky='ew', padx=5, pady=5)
-        ttk.Label(regla_frame, text='Consumir:').grid(row=0, column=0)
-        self.entry_izq = ttk.Entry(regla_frame)
-        self.entry_izq.grid(row=0, column=1, padx=5, pady=2)
-        ttk.Label(regla_frame, text='Producir:').grid(row=1, column=0)
-        self.entry_der = ttk.Entry(regla_frame)
-        self.entry_der.grid(row=1, column=1, padx=5, pady=2)
-        ttk.Label(regla_frame, text='Prioridad:').grid(row=2, column=0)
+        # Separador
+        ttk.Separator(right_frame, orient='horizontal').grid(row=2, column=0, columnspan=3, sticky='ew', pady=10)
+
+        # Definir regla
+        ttk.Label(right_frame, text='Consumir*:').grid(row=3, column=0, padx=5, pady=2, sticky='e')
+        self.entry_izq = ttk.Entry(right_frame)
+        self.entry_izq.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(right_frame, text='Producir:').grid(row=4, column=0, padx=5, pady=2, sticky='e')
+        self.entry_der = ttk.Entry(right_frame)
+        self.entry_der.grid(row=4, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(right_frame, text='Prioridad:').grid(row=5, column=0, padx=5, pady=2, sticky='e')
         vcmd = (self.register(self._validate_entero), '%P')
-        self.entry_prioridad = ttk.Entry(regla_frame, validate='key', validatecommand=vcmd)
-        self.entry_prioridad.insert(0, '1')
-        self.entry_prioridad.grid(row=2, column=1, padx=5, pady=2)
-        # Checkbox disolver y crear membrana
+        self.entry_prioridad = ttk.Entry(right_frame, validate='key', validatecommand=vcmd)
+        self.entry_prioridad.insert(0,'1')
+        self.entry_prioridad.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
+
+        # Opciones de regla
         self.var_disolver = tk.BooleanVar()
         self.var_crear = tk.BooleanVar()
-        chk_disolver = ttk.Checkbutton(regla_frame, text='Disuelve membrana', variable=self.var_disolver,
-                                       command=self._toggle_options)
-        chk_disolver.grid(row=3, column=0, sticky='w', padx=5)
-        ttk.Label(regla_frame, text='Crear membrana ID:').grid(row=4, column=0)
-        self.entry_crear = ttk.Entry(regla_frame, width=5)
-        self.entry_crear.grid(row=4, column=1, sticky='w', padx=5)
-        chk_crear = ttk.Checkbutton(regla_frame, text='', variable=self.var_crear, command=self._toggle_options)
-        chk_crear.grid(row=4, column=2, sticky='w')
-        btn_agregar_regla = ttk.Button(regla_frame, text='Agregar Regla', command=self.agregar_regla)
-        btn_agregar_regla.grid(row=5, column=0, columnspan=3, pady=5)
-        self.lbl_status = ttk.Label(regla_frame, text='')
-        self.lbl_status.grid(row=6, column=0, columnspan=3)
+        ttk.Checkbutton(right_frame, text='Disolver membrana', variable=self.var_disolver,
+                        command=self._toggle_options).grid(row=6, column=0, padx=5, pady=2, sticky='w')
+        ttk.Checkbutton(right_frame, text='Crear membrana', variable=self.var_crear,
+                        command=self._toggle_options).grid(row=7, column=0, padx=5, pady=2, sticky='w')
+        ttk.Label(right_frame, text='ID destino:').grid(row=7, column=1, padx=5, sticky='e')
+        self.entry_crear = ttk.Entry(right_frame, width=5, state='disabled')
+        self.entry_crear.grid(row=7, column=2, padx=5, sticky='w')
+        ttk.Button(right_frame, text='Añadir regla', command=self.agregar_regla).grid(row=8, column=0, columnspan=3, pady=10)
 
-        # Botón guardar
-        btn_guardar = ttk.Button(self, text='Guardar y Salir', command=self.on_save)
-        btn_guardar.grid(row=7, column=1, sticky='e', padx=5, pady=5)
+        # Lista de reglas para la membrana seleccionada
+        reglas_frame = ttk.LabelFrame(cont, text='Reglas de la Membrana Seleccionada')
+        reglas_frame.grid(row=1, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
+        reglas_frame.columnconfigure(0, weight=1)
+        self.lista_reglas = tk.Listbox(reglas_frame, height=6, font=('Consolas',10))
+        self.lista_reglas.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
-        # Membrana inicial (piel)
+        # Panel inferior: añadir membrana y guardar
+        bottom = ttk.Frame(self)
+        bottom.pack(fill='x', pady=5)
+        ttk.Label(bottom, text='ID Padre para nueva membrana:').pack(side='left', padx=5)
+        self.entry_padre = ttk.Entry(bottom, width=5)
+        self.entry_padre.pack(side='left')
+        ttk.Button(bottom, text='Agregar membrana', command=self.agregar_membrana).pack(side='left', padx=5)
+        ttk.Button(bottom, text='Guardar y salir', command=self.on_save).pack(side='right', padx=10)
+
+        # Inicializar membrana raíz
         piel = Membrana(id_mem=str(self.mem_counter), resources={})
         self.system.add_membrane(piel, None)
         self.tree.insert('', 'end', str(self.mem_counter), text=self._texto_membrana(piel))
 
-    def _validate_entero(self, valor):
-        return valor.isdigit() or valor == ''
+    def _validate_entero(self, v):
+        return v.isdigit() or v==' '
 
     def _toggle_options(self):
-        # Evitar ambas opciones simultáneas
         if self.var_disolver.get():
             self.var_crear.set(False)
             self.entry_crear.configure(state='disabled')
@@ -96,116 +114,94 @@ class ConfiguradorPSistema(tk.Tk):
         else:
             self.entry_crear.configure(state='disabled')
 
-    def _texto_membrana(self, membrana: Membrana) -> str:
-        if membrana.resources:
-            items = sorted(membrana.resources.items())
-            res_str = ','.join(f'{k}:{v}' for k, v in items)
-            return f'Membrana {membrana.id_mem} [{res_str}]'
-        return f'Membrana {membrana.id_mem} []'
+    def _texto_membrana(self, m: Membrana) -> str:
+        if m.resources:
+            s = ','.join(f"{k}:{v}" for k,v in sorted(m.resources.items()))
+            return f"Membrana {m.id_mem} [{s}]"
+        return f"Membrana {m.id_mem} []"
 
     def on_select(self, event):
-        seleccion = self.tree.selection()
-        if seleccion:
-            mem_id = seleccion[0]
-            self.selected_membrane = self.system.skin[mem_id]
+        sel = self.tree.selection()
+        if sel:
+            self.selected_membrane = self.system.skin[sel[0]]
             self._actualizar_recursos()
+            self._actualizar_reglas()
 
     def _actualizar_recursos(self):
-        self.lista_recursos.delete(0, tk.END)
-        for sim, cnt in sorted(self.selected_membrane.resources.items()):
-            self.lista_recursos.insert(tk.END, f"{sim}: {cnt}")
-        self.tree.item(self.selected_membrane.id_mem,
-                       text=self._texto_membrana(self.selected_membrane))
+        self.lista_recursos.delete(0, 'end')
+        for k,v in sorted(self.selected_membrane.resources.items()):
+            self.lista_recursos.insert('end', f"{k}: {v}")
+        self.tree.item(self.selected_membrane.id_mem, text=self._texto_membrana(self.selected_membrane))
+
+    def _actualizar_reglas(self):
+        self.lista_reglas.delete(0, 'end')
+        for r in self.selected_membrane.reglas:
+            self.lista_reglas.insert('end', repr(r))
 
     def agregar_membrana(self):
-        self.mem_counter += 1
-        nuevo_id = str(self.mem_counter)
-        nueva = Membrana(id_mem=nuevo_id, resources={})
-        seleccion = self.tree.selection()
-        if seleccion:
-            padre_id = seleccion[0]
-            self.system.add_membrane(nueva, padre_id)
-            self.tree.insert(padre_id, 'end', nuevo_id, text=self._texto_membrana(nueva))
-        else:
-            raices = self.tree.get_children('')
-            self.system.add_membrane(nueva, None)
-            self.tree.insert('', 'end', nuevo_id, text=self._texto_membrana(nueva))
-            for rid in raices:
-                mem = self.system.skin[rid]
-                mem.parent = nuevo_id
-                self.system.skin[nuevo_id].children.append(rid)
-                self.tree.move(rid, nuevo_id, 'end')
-
-    def crear_en_padre(self):
         pid = self.entry_padre.get().strip()
-        if pid not in self.system.skin:
-            messagebox.showerror('Error', f"Membrana padre '{pid}' no existe.")
-            return
         self.mem_counter += 1
-        nuevo_id = str(self.mem_counter)
-        nueva = Membrana(id_mem=nuevo_id, resources={})
-        self.system.add_membrane(nueva, pid)
-        self.tree.insert(pid, 'end', nuevo_id, text=self._texto_membrana(nueva))
-        self.entry_padre.delete(0, tk.END)
+        nid = str(self.mem_counter)
+        nueva = Membrana(id_mem=nid, resources={})
+        if pid and pid in self.system.skin:
+            self.system.add_membrane(nueva, pid)
+            self.tree.insert(pid, 'end', nid, text=self._texto_membrana(nueva))
+        elif self.selected_membrane:
+            self.system.add_membrane(nueva, self.selected_membrane.id_mem)
+            self.tree.insert(self.selected_membrane.id_mem, 'end', nid, text=self._texto_membrana(nueva))
+        else:
+            self.system.add_membrane(nueva, None)
+            self.tree.insert('', 'end', nid, text=self._texto_membrana(nueva))
+        self.entry_padre.delete(0, 'end')
 
     def agregar_recurso(self):
-        sim = self.entry_simbolo.get().strip()
-        if not re.fullmatch(r'[A-Za-z]+', sim):
-            messagebox.showerror('Error', 'El símbolo debe contener solo letras ASCII sin acentos.')
+        s = self.entry_simbolo.get().strip()
+        if not re.fullmatch(r'[A-Za-z]+', s):
+            messagebox.showerror('Error', 'Símbolos ASCII sin acentos.')
             return
-        if self.selected_membrane:
-            rec = self.selected_membrane.resources
-            for c in sim:
-                rec[c] = rec.get(c, 0) + 1
-            self._actualizar_recursos()
-            self.entry_simbolo.delete(0, tk.END)
+        for c in s:
+            self.selected_membrane.resources[c] = self.selected_membrane.resources.get(c, 0) + 1
+        self._actualizar_recursos()
+        self.entry_simbolo.delete(0, 'end')
 
-    def _parsear_multiconjunto(self, cadena: str) -> dict:
+    def _parsear(self, s: str) -> dict:
         ms = {}
-        for c in cadena.strip():
+        for c in s:
             ms[c] = ms.get(c, 0) + 1
         return ms
 
     def agregar_regla(self):
-        self.lbl_status.config(text='', foreground='')
         izq = self.entry_izq.get().strip()
         if not re.fullmatch(r'[A-Za-z]+', izq):
-            messagebox.showerror('Error', 'La cadena consumir es obligatoria y debe contener solo letras ASCII sin acentos.')
+            messagebox.showerror('Error', 'Campo consumir obligatorio.')
             return
         der = self.entry_der.get().strip()
         if der and not re.fullmatch(r'[A-Za-z]+', der):
-            messagebox.showerror('Error', 'La cadena producir debe contener solo letras ASCII sin acentos o estar vacía.')
+            messagebox.showerror('Error', 'Campo producir inválido.')
             return
         prio = self.entry_prioridad.get().strip()
-        if prio == '':
-            messagebox.showerror('Error', 'La prioridad es obligatoria.')
+        if not prio:
+            messagebox.showerror('Error', 'Prioridad obligatoria.')
             return
-        prioridad = int(prio)
-        left_ms = self._parsear_multiconjunto(izq)
-        right_ms = self._parsear_multiconjunto(der) if der else {}
-        regla = Regla(left=left_ms, right=right_ms, priority=prioridad)
-        # Disolver membrana
-        if self.var_disolver.get() and self.selected_membrane:
+        regla = Regla(left=self._parsear(izq), right=self._parsear(der) if der else {}, priority=int(prio))
+        if self.var_disolver.get():
             regla.dissolve_membranes.append(self.selected_membrane.id_mem)
-        # Crear membrana
         if self.var_crear.get():
-            target_id = self.entry_crear.get().strip()
-            if not target_id or target_id not in self.system.skin:
-                messagebox.showerror('Error', 'ID destino para crear membrana inválido.')
+            tgt = self.entry_crear.get().strip()
+            if tgt not in self.system.skin:
+                messagebox.showerror('Error', 'ID destino inválido.')
                 return
-            regla.create_membranes = [target_id]
-        if self.selected_membrane:
-            self.selected_membrane.add_regla(regla)
-            self.lbl_status.config(text=f'Regla añadida (prio {prioridad})', foreground='green')
-            # Reset campos
-            self.entry_izq.delete(0, tk.END)
-            self.entry_der.delete(0, tk.END)
-            self.entry_prioridad.delete(0, tk.END)
-            self.entry_prioridad.insert(0, '1')
-            self.var_disolver.set(False)
-            self.var_crear.set(False)
-            self.entry_crear.delete(0, tk.END)
-            self.entry_crear.configure(state='disabled')
+            regla.create_membranes = [tgt]
+        self.selected_membrane.add_regla(regla)
+        self.lbl_status.config(text=f'Regla con prio {prio} añadida', foreground='green')
+        self._actualizar_reglas()
+        for e in (self.entry_izq, self.entry_der, self.entry_prioridad):
+            e.delete(0, 'end')
+        self.entry_prioridad.insert(0, '1')
+        self.var_disolver.set(False)
+        self.var_crear.set(False)
+        self.entry_crear.delete(0, 'end')
+        self.entry_crear.configure(state='disabled')
 
     def on_save(self):
         self.destroy()
