@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import re
+import random
 from .SistemaP import SistemaP, Membrana, Regla
 
 class ConfiguradorPSistema(tk.Tk):
@@ -18,18 +19,19 @@ class ConfiguradorPSistema(tk.Tk):
         self.style.configure('TButton', font=('Arial', 9))
         self.style.configure('Treeview', font=('Consolas', 10), rowheight=24)
 
-        self.system = SistemaP()
+        self.system = None
         self.selected_membrane = None
-        self.mem_counter = 1
+        self.mem_counter = 0
         self.saved = False  # bandera para indicar guardado
         self.exit_membrane_id = None  # id de membrana de salida
 
         # Manejar cierre de ventana
         self.protocol('WM_DELETE_WINDOW', self._on_close)
         self._construir_interfaz()
+        # Generar sistema inicial vacío
+        self.generar_sistema_aleatorio()
 
     def _on_close(self):
-        # Si se cierra sin guardar
         self.saved = False
         self.destroy()
 
@@ -48,8 +50,7 @@ class ConfiguradorPSistema(tk.Tk):
         self.tree = ttk.Treeview(tree_frame)
         self.tree.heading('#0', text='Membranas')
         self.tree.bind('<<TreeviewSelect>>', self.on_select)
-        self.tree.grid(row=0, column=0, rowspan=3, sticky='nsew', padx=5, pady=5)  # Ocupa 3 filas para mayor altura
-        # Checkbox de salida
+        self.tree.grid(row=0, column=0, rowspan=3, sticky='nsew', padx=5, pady=5)
         self.var_salida = tk.BooleanVar()
         self.chk_salida = ttk.Checkbutton(tree_frame, text='Membrana de salida', variable=self.var_salida,
                                          command=self._on_toggle_salida)
@@ -101,19 +102,15 @@ class ConfiguradorPSistema(tk.Tk):
         self.lista_reglas = tk.Listbox(reglas_frame, height=6, font=('Consolas',10))
         self.lista_reglas.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
-        # Panel inferior: agregar membrana y guardar
+        # Panel inferior: agregar membrana, generar aleatorio y guardar
         bottom = ttk.Frame(self)
         bottom.pack(side='bottom', fill='x', padx=10, pady=5)
         ttk.Label(bottom, text='ID Padre para nueva membrana:').pack(side='left', padx=5)
         self.entry_padre = ttk.Entry(bottom, width=5)
         self.entry_padre.pack(side='left')
         ttk.Button(bottom, text='Agregar membrana', command=self.agregar_membrana).pack(side='left', padx=5)
+        ttk.Button(bottom, text='Generar aleatorio', command=self.generar_sistema_aleatorio).pack(side='left', padx=5)
         ttk.Button(bottom, text='Guardar y salir', command=self.on_save).pack(side='right', padx=10)
-
-        # Inicializar membrana raíz
-        piel = Membrana(id_mem=str(self.mem_counter), resources={})
-        self.system.add_membrane(piel, None)
-        self.tree.insert('', 'end', str(self.mem_counter), text=self._texto_membrana(piel))
 
     def _validate_entero(self, v):
         return v.isdigit() or v == ''
@@ -129,7 +126,6 @@ class ConfiguradorPSistema(tk.Tk):
             self.entry_crear.configure(state='disabled')
 
     def _texto_membrana(self, m: Membrana) -> str:
-        # Construir texto y marcar salida
         if m.resources:
             s = ','.join(f"{k}:{v}" for k,v in sorted(m.resources.items()))
             base = f"Membrana {m.id_mem} [{s}]"
@@ -145,29 +141,23 @@ class ConfiguradorPSistema(tk.Tk):
             self.selected_membrane = self.system.skin[sel[0]]
             self._actualizar_recursos()
             self._actualizar_reglas()
-            # Actualizar checkbox de salida
             self.var_salida.set(self.selected_membrane.id_mem == self.exit_membrane_id)
-        # Refrescar etiquetas de todas las membranas para mostrar estado de salida
         for mem_id, membr in self.system.skin.items():
             self.tree.item(mem_id, text=self._texto_membrana(membr))
 
     def _on_toggle_salida(self):
         if not self.selected_membrane:
             return
-        # Desmarcar anterior visualmente
         prev = self.exit_membrane_id
         if prev:
             node_prev = self.system.skin.get(prev)
             if node_prev:
                 self.tree.item(prev, text=self._texto_membrana(node_prev))
-        # Marcar nuevo o desactivar
         if self.var_salida.get():
             self.exit_membrane_id = self.selected_membrane.id_mem
         else:
             self.exit_membrane_id = None
-        # Actualizar atributo del sistema
         self.system.output_membrane = self.exit_membrane_id
-        # Refrescar todos los textos
         for mem_id, membr in self.system.skin.items():
             self.tree.item(mem_id, text=self._texto_membrana(membr))
 
@@ -184,13 +174,9 @@ class ConfiguradorPSistema(tk.Tk):
             consumir = ' '.join(f"{sym}×{cnt}" for sym,cnt in r.left.items())
             parts.append(f"Consumir: {consumir}")
             if r.right:
-                producir = ' '.join(f"{sym}×{cnt}" for sym,cnt in r.right.items())
-                parts.append(f"Producir: {producir}")
+                produzir = ' '.join(f"{sym}×{cnt}" for sym,cnt in r.right.items())
+                parts.append(f"Producir: {produzir}")
             parts.append(f"Prioridad: {r.priority}")
-            if getattr(r, 'dissolve_membranes', []):
-                parts.append(f"Disuelve: {', '.join(r.dissolve_membranes)}")
-            if getattr(r, 'create_membranes', []):
-                parts.append(f"Crea: {', '.join(r.create_membranes)}")
             texto = ' | '.join(parts)
             self.lista_reglas.insert('end', texto)
 
@@ -202,7 +188,7 @@ class ConfiguradorPSistema(tk.Tk):
         if pid and pid in self.system.skin:
             self.system.add_membrane(nueva, pid)
             self.tree.insert(pid, 'end', nid, text=self._texto_membrana(nueva))
-        elif	self.selected_membrane:
+        elif self.selected_membrane:
             self.system.add_membrane(nueva, self.selected_membrane.id_mem)
             self.tree.insert(self.selected_membrane.id_mem, 'end', nid, text=self._texto_membrana(nueva))
         else:
@@ -211,6 +197,9 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_padre.delete(0, 'end')
 
     def agregar_recurso(self):
+        if not self.selected_membrane:
+            messagebox.showwarning('Advertencia', 'Seleccione una membrana antes de añadir recursos.')
+            return
         s = self.entry_simbolo.get().strip()
         if not re.fullmatch(r'[A-Za-z]+', s):
             messagebox.showerror('Error', 'Símbolos ASCII sin acentos.')
@@ -219,12 +208,6 @@ class ConfiguradorPSistema(tk.Tk):
             self.selected_membrane.resources[c] = self.selected_membrane.resources.get(c, 0) + 1
         self._actualizar_recursos()
         self.entry_simbolo.delete(0, 'end')
-
-    def _parsear(self, s: str) -> dict:
-        ms = {}
-        for c in s:
-            ms[c] = ms.get(c, 0) + 1
-        return ms
 
     def agregar_regla(self):
         izq = self.entry_izq.get().strip()
@@ -243,14 +226,6 @@ class ConfiguradorPSistema(tk.Tk):
             messagebox.showerror('Error', 'Prioridad obligatoria.')
             return
         regla = Regla(left=self._parsear(izq), right=self._parsear(der) if der else {}, priority=int(prio))
-        if self.var_disolver.get():
-            regla.dissolve_membranes.append(self.selected_membrane.id_mem)
-        if self.var_crear.get():
-            tgt = self.entry_crear.get().strip()
-            if tgt not in self.system.skin:
-                messagebox.showerror('Error', 'ID destino inválido.')
-                return
-            regla.create_membranes = [tgt]
         self.selected_membrane.add_regla(regla)
         self.lbl_status.config(text='Regla añadida correctamente', foreground='green')
         self._actualizar_reglas()
@@ -260,6 +235,63 @@ class ConfiguradorPSistema(tk.Tk):
         self.var_crear.set(False);
         self.entry_crear.delete(0, 'end');
         self.entry_crear.configure(state='disabled')
+
+    def generar_sistema_aleatorio(self):
+        # Inicializar nuevo sistema y árbol
+        self.system = SistemaP()
+        self.tree.delete(*self.tree.get_children())
+        self.mem_counter = 0
+        letras = list("abcdefghijk")
+        # Número aleatorio de membranas
+        total = random.randint(2,6)
+        ids = []
+        for _ in range(total):
+            self.mem_counter += 1
+            mid = str(self.mem_counter)
+            m = Membrana(id_mem=mid, resources={})
+            if ids:
+                parent = random.choice(ids)
+            else:
+                parent = None
+            self.system.add_membrane(m, parent)
+            if parent:
+                self.tree.insert(parent, 'end', mid, text=self._texto_membrana(m))
+            else:
+                self.tree.insert('', 'end', mid, text=self._texto_membrana(m))
+            ids.append(mid)
+            # Recursos aleatorios
+            for _ in range(random.randint(0,10)):
+                simbolo = random.choice(letras)
+                m.resources[simbolo] = m.resources.get(simbolo,0) + 1
+            # Reglas aleatorias
+            num_reglas = random.randint(1,5)
+            for __ in range(num_reglas):
+                # Seleccionar consumo
+                tipos_consumo = random.sample(letras, k=random.randint(1, min(3,len(letras))))
+                left = {t: random.randint(1,3) for t in tipos_consumo}
+                # Seleccionar producción
+                prod_count = random.randint(0,3)
+                tipos_prod = random.sample(letras, k=min(prod_count,len(letras)))
+                right = {t: random.randint(1,3) for t in tipos_prod}
+                r = Regla(left=left, right=right, priority=random.randint(1,5))
+                m.add_regla(r)
+        # Membrana de salida aleatoria
+        self.exit_membrane_id = random.choice(ids)
+        self.system.output_membrane = self.exit_membrane_id
+        # Refrescar árbol
+        for mem_id, membr in self.system.skin.items():
+            self.tree.item(mem_id, text=self._texto_membrana(membr))
+        # Seleccionar la raíz
+        if ids:
+            root = ids[0]
+            self.tree.selection_set(root)
+            self.on_select(None)
+
+    def _parsear(self, s: str) -> dict:
+        ms = {}
+        for c in s:
+            ms[c] = ms.get(c, 0) + 1
+        return ms
 
     def on_save(self):
         self.saved = True
