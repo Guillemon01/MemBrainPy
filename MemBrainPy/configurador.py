@@ -78,18 +78,25 @@ class ConfiguradorPSistema(tk.Tk):
         # Definición de reglas
         regla_frame = ttk.LabelFrame(cont, text='Definición de Reglas')
         regla_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
-        for i in range(3): regla_frame.columnconfigure(i, weight=1)
+        for i in range(4): regla_frame.columnconfigure(i, weight=1)
         ttk.Label(regla_frame, text='Consumir*:').grid(row=0, column=0, sticky='e', padx=5)
         self.entry_izq = ttk.Entry(regla_frame)
         self.entry_izq.grid(row=0, column=1, sticky='ew', padx=5)
+
         ttk.Label(regla_frame, text='Producir:').grid(row=1, column=0, sticky='e', padx=5)
         self.entry_der = ttk.Entry(regla_frame)
         self.entry_der.grid(row=1, column=1, sticky='ew', padx=5)
+        # Campo texto para destino de producción
+        ttk.Label(regla_frame, text='Destino:').grid(row=1, column=2, sticky='e', padx=5)
+        self.entry_destino = ttk.Entry(regla_frame, width=5)
+        self.entry_destino.grid(row=1, column=3, sticky='w', padx=5)
+
         ttk.Label(regla_frame, text='Prioridad:').grid(row=2, column=0, sticky='e', padx=5)
         vcmd = (self.register(self._validate_entero), '%P')
         self.entry_prioridad = ttk.Entry(regla_frame, validate='key', validatecommand=vcmd)
         self.entry_prioridad.insert(0, '1')
         self.entry_prioridad.grid(row=2, column=1, sticky='ew', padx=5)
+
         self.var_disolver = tk.BooleanVar()
         self.var_crear = tk.BooleanVar()
         ttk.Checkbutton(regla_frame, text='Disolver membrana', variable=self.var_disolver,
@@ -99,9 +106,9 @@ class ConfiguradorPSistema(tk.Tk):
         ttk.Label(regla_frame, text='ID destino:').grid(row=4, column=1, sticky='e', padx=5)
         self.entry_crear = ttk.Entry(regla_frame, width=5, state='disabled')
         self.entry_crear.grid(row=4, column=2, sticky='w', padx=5)
-        ttk.Button(regla_frame, text='Añadir regla', command=self.agregar_regla).grid(row=5, column=0, columnspan=3, pady=10)
+        ttk.Button(regla_frame, text='Añadir regla', command=self.agregar_regla).grid(row=5, column=0, columnspan=4, pady=10)
         self.lbl_status = ttk.Label(regla_frame, text='', font=('Arial', 9, 'italic'))
-        self.lbl_status.grid(row=6, column=0, columnspan=3)
+        self.lbl_status.grid(row=6, column=0, columnspan=4)
 
         # Lista de reglas y borrar
         reglas_frame = ttk.LabelFrame(cont, text='Reglas de la Membrana Seleccionada')
@@ -146,15 +153,11 @@ class ConfiguradorPSistema(tk.Tk):
         if not sel:
             return
         mid = sel[0]
-        # si el nodo ya no existe en el Treeview (por haberlo borrado), salimos
         if not self.tree.exists(mid):
             return
-        # Actualizar selected_membrane
         self.selected_membrane = self.system.skin[mid]
-        # Actualizar recursos y reglas
         self._actualizar_recursos()
         self._actualizar_reglas()
-        # actualizar checkbox salida
         self.var_salida.set(self.exit_membrane_id == mid)
 
     def _on_toggle_salida(self):
@@ -179,13 +182,19 @@ class ConfiguradorPSistema(tk.Tk):
         self.lista_reglas.delete(0, 'end')
         for idx, r in enumerate(self.selected_membrane.reglas):
             consumir = ' '.join(f"{s}×{c}" for s,c in r.left.items())
-            prod = ' '.join(f"{s}×{c}" for s,c in r.right.items()) if r.right else ''
+            prod_items = []
+            for simb, cnt in r.right.items():
+                if '_in_' in simb:
+                    base, target = simb.split('_in_')
+                    prod_items.append(f"{base}→{target}×{cnt}")
+                else:
+                    prod_items.append(f"{simb}×{cnt}")
+            prod = ' '.join(prod_items)
             texto = f"{idx+1}. Consumir: {consumir}" + (f" | Producir: {prod}" if prod else '') + f" | Prioridad: {r.priority}"
             self.lista_reglas.insert('end', texto)
 
     def agregar_membrana(self):
         pid = self.entry_padre.get().strip()
-        # Si no especifica, usar seleccionada
         if not pid:
             pid = self.selected_membrane.id_mem if self.selected_membrane else None
         self.mem_counter += 1
@@ -194,7 +203,6 @@ class ConfiguradorPSistema(tk.Tk):
         parent = pid if pid in self.system.skin else None
         self.system.add_membrane(nueva, parent)
         self.tree.insert(parent or '', 'end', nid, text=self._texto_membrana(nueva))
-        # limpiar campo
         self.entry_padre.delete(0, 'end')
 
     def agregar_recurso(self):
@@ -211,28 +219,57 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_simbolo.delete(0, 'end')
 
     def agregar_regla(self):
-        if not self.selected_membrane: return
+        if not self.selected_membrane:
+            return
+
         izq = self.entry_izq.get().strip()
-        if self.var_disolver.get() and self.selected_membrane.id_mem=='1':
-            messagebox.showerror('Error','No disolver membrana raíz')
+        if self.var_disolver.get() and self.selected_membrane.id_mem == '1':
+            messagebox.showerror('Error', 'No disolver membrana raíz')
             return
-        if not re.fullmatch(r'[A-Za-z]+',izq):
-            messagebox.showerror('Error','Campo consumir obligatorio')
+        if not re.fullmatch(r'[A-Za-z]+', izq):
+            messagebox.showerror('Error', 'Campo consumir obligatorio')
             return
+
         der = self.entry_der.get().strip()
-        if der and not re.fullmatch(r'[A-Za-z]+',der):
-            messagebox.showerror('Error','Campo producir inválido')
+        if der and not re.fullmatch(r'[A-Za-z]+', der):
+            messagebox.showerror('Error', 'Campo producir inválido')
             return
+
+        destino = self.entry_destino.get().strip()
+        if destino and destino not in self.system.skin:
+            messagebox.showerror('Error', f"Membrana destino '{destino}' no existe")
+            return
+
         prio = self.entry_prioridad.get().strip()
         if not prio:
-            messagebox.showerror('Error','Prioridad obligatoria')
+            messagebox.showerror('Error', 'Prioridad obligatoria')
             return
-        regla = Regla(left=self._parsear(izq), right=self._parsear(der) if der else {}, priority=int(prio))
+
+        # Construir multiconjunto de producción según destino
+        right = {}
+        if der:
+            parsed = self._parsear(der)
+            if destino:
+                for s, c in parsed.items():
+                    right[f"{s}_in_{destino}"] = c
+            else:
+                right = parsed
+
+        regla = Regla(left=self._parsear(izq), right=right, priority=int(prio))
         self.selected_membrane.reglas.append(regla)
         self.lbl_status.config(text='Regla añadida', foreground='green')
         self._actualizar_reglas()
-        self.entry_izq.delete(0,'end'); self.entry_der.delete(0,'end'); self.entry_prioridad.delete(0,'end'); self.entry_prioridad.insert(0,'1')
-        self.var_disolver.set(False); self.var_crear.set(False); self.entry_crear.configure(state='disabled')
+
+        # Limpiar campos
+        self.entry_izq.delete(0, 'end')
+        self.entry_der.delete(0, 'end')
+        self.entry_destino.delete(0, 'end')
+        self.entry_prioridad.delete(0, 'end')
+        self.entry_prioridad.insert(0, '1')
+        self.var_disolver.set(False)
+        self.var_crear.set(False)
+        self.entry_crear.configure(state='disabled')
+
 
     def generar_sistema_aleatorio(self):
         self.system = SistemaP()
