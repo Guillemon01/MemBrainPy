@@ -28,8 +28,14 @@ class ConfiguradorPSistema(tk.Tk):
         # Manejar cierre de ventana
         self.protocol('WM_DELETE_WINDOW', self._on_close)
         self._construir_interfaz()
-        # Generar sistema inicial vacío
-        self.generar_sistema_aleatorio()
+        # Generar sistema inicial con una sola membrana raíz
+        root = Membrana(id_mem='1', resources={})
+        self.mem_counter = 1
+        self.system = SistemaP()
+        self.system.add_membrane(root, None)
+        self.tree.insert('', 'end', '1', text=self._texto_membrana(root))
+        self.tree.selection_set('1')
+        self.on_select(None)
 
     def _on_close(self):
         self.saved = False

@@ -7,7 +7,7 @@ funciones básicas y devuelve el resultado numérico correspondiente.
 """
 
 from .SistemaP import simular_lapso
-import funciones
+from . import funciones
 
 
 def _run_suma(n: int, m: int) -> int:
