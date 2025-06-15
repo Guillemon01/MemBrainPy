@@ -408,7 +408,7 @@ def simular_varios_y_visualizar(
                 sel_line: List[Optional[Dict[str,List[Tuple[Regla,int]]]]]=[]
                 for k, sis in enumerate(nuevos):
                     seed = None if rng_seed is None else rng_seed + k + len(historiales)
-                    lap = simular_lapso(sis, modo=modo, rng_seed=seed)
+                    lap = simular_lapso(sis, rng_seed=seed)
                     sel_line.append(lap.seleccionados)
                 historiales.append(nuevos)
                 max_aplicados.append(sel_line)

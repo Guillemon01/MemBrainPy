@@ -7,10 +7,7 @@ __all__ = []
 
 # Itera sobre cada submódulo/subpaquete de este paquete
 for finder, module_name, is_pkg in pkgutil.iter_modules(__path__):
-    # opcional: ignora los tests
-    if module_name.startswith("tests"):
-        continue
-
+    
     # importa el módulo o subpaquete
     module = importlib.import_module(f"{__name__}.{module_name}")
     # añade el nombre del módulo al namespace del paquete

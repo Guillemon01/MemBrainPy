@@ -1,5 +1,5 @@
 import random
-from SistemaP import SistemaP, Membrana, Regla
+from .SistemaP import SistemaP, Membrana, Regla
 
 def sistema_basico(recursos: dict = None, num_reglas: int = None) -> SistemaP:
     """

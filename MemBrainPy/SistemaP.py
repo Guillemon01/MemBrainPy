@@ -375,7 +375,7 @@ def registrar_estadisticas(
         seed = None
         if rng_seed is not None:
             seed = rng_seed + i
-        lapso_res = simular_lapso(sistema, modo=modo, rng_seed=seed)
+        lapso_res = simular_lapso(sistema, rng_seed=seed)
         all_results.append(lapso_res)
 
     # Construir lista de filas
