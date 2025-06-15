@@ -13,5 +13,3 @@ MemBrainPy.egg-info/SOURCES.txt
 MemBrainPy.egg-info/dependency_links.txt
 MemBrainPy.egg-info/requires.txt
 MemBrainPy.egg-info/top_level.txt
-tests/test_modulo1.py
-tests/test_operaciones_avanzadas.py
