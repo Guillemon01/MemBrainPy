@@ -204,3 +204,27 @@ def actividad2(n: int, k: int) -> SistemaP:
     m2.add_regla(Regla({"a": 1, "e": 1}, {"c": 1}, priority=2))
     m2.add_regla(Regla({"d": 1}, {"d": 1}, priority=1, dissolve_membranes=["m2"]))
     return sistema
+
+def division_creacion() -> SistemaP:
+    """
+    Sistema de prueba que incluye:
+    - Regla de división: convierte 'a' en dos membranas con 'b' y 'c'.
+    - Regla de creación: convierte 'x' en una nueva membrana 'k' con objetos iniciales y reglas propias.
+    """
+    sistema = SistemaP()
+    
+    # Definir prototipo de la membrana 'k' con sus reglas propias
+    prot_k = Membrana("k", {})
+    # Ejemplo de regla propia en 'k': evoluciona 'y' a 'z'
+    prot_k.add_regla(Regla({"y": 1}, {"z": 1}, priority=1))
+    sistema.register_prototype(prot_k)
+    
+    # Crear membrana de prueba
+    m = Membrana("m_test", {"a": 1, "x": 1})
+    # Regla de división: consume 'a' y produce dos copias con 'b' y 'c'
+    m.add_regla(Regla({"a": 1}, {}, priority=1, division=( {"b": 1}, {"c": 1} )))
+    # Regla de creación: consume 'x' y crea membrana 'k' con {'y': 2}
+    m.add_regla(Regla({"x": 1}, {}, priority=1, create_membranes=[("k", {"y": 2})]))
+    
+    sistema.add_membrane(m)
+    return sistema
