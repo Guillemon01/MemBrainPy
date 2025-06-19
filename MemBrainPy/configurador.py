@@ -78,7 +78,10 @@ class ConfiguradorPSistema(tk.Tk):
         # Definición de reglas
         regla_frame = ttk.LabelFrame(cont, text='Definición de Reglas')
         regla_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
-        for i in range(4): regla_frame.columnconfigure(i, weight=1)
+        for i in range(4):
+            regla_frame.columnconfigure(i, weight=1)
+
+        # Consumir y producir
         ttk.Label(regla_frame, text='Consumir*:').grid(row=0, column=0, sticky='e', padx=5)
         self.entry_izq = ttk.Entry(regla_frame)
         self.entry_izq.grid(row=0, column=1, sticky='ew', padx=5)
@@ -86,19 +89,22 @@ class ConfiguradorPSistema(tk.Tk):
         ttk.Label(regla_frame, text='Producir:').grid(row=1, column=0, sticky='e', padx=5)
         self.entry_der = ttk.Entry(regla_frame)
         self.entry_der.grid(row=1, column=1, sticky='ew', padx=5)
-        # Campo texto para destino de producción
         ttk.Label(regla_frame, text='Destino:').grid(row=1, column=2, sticky='e', padx=5)
         self.entry_destino = ttk.Entry(regla_frame, width=5)
         self.entry_destino.grid(row=1, column=3, sticky='w', padx=5)
 
+        # Prioridad
         ttk.Label(regla_frame, text='Prioridad:').grid(row=2, column=0, sticky='e', padx=5)
         vcmd = (self.register(self._validate_entero), '%P')
         self.entry_prioridad = ttk.Entry(regla_frame, validate='key', validatecommand=vcmd)
         self.entry_prioridad.insert(0, '1')
         self.entry_prioridad.grid(row=2, column=1, sticky='ew', padx=5)
 
+        # Opciones de disolver / crear / dividir
         self.var_disolver = tk.BooleanVar()
         self.var_crear = tk.BooleanVar()
+        self.var_dividir = tk.BooleanVar()
+
         ttk.Checkbutton(regla_frame, text='Disolver membrana', variable=self.var_disolver,
                         command=self._toggle_options).grid(row=3, column=0, sticky='w', padx=5)
         ttk.Checkbutton(regla_frame, text='Crear membrana', variable=self.var_crear,
@@ -106,9 +112,21 @@ class ConfiguradorPSistema(tk.Tk):
         ttk.Label(regla_frame, text='ID destino:').grid(row=4, column=1, sticky='e', padx=5)
         self.entry_crear = ttk.Entry(regla_frame, width=5, state='disabled')
         self.entry_crear.grid(row=4, column=2, sticky='w', padx=5)
-        ttk.Button(regla_frame, text='Añadir regla', command=self.agregar_regla).grid(row=5, column=0, columnspan=4, pady=10)
+
+        ttk.Checkbutton(regla_frame, text='Dividir membrana', variable=self.var_dividir,
+                        command=self._toggle_options).grid(row=3, column=2, sticky='w', padx=5)
+        ttk.Label(regla_frame, text='Multi v:').grid(row=4, column=2, sticky='e', padx=5)
+        self.entry_div_v = ttk.Entry(regla_frame, width=15, state='disabled')
+        self.entry_div_v.grid(row=4, column=3, sticky='w', padx=5)
+        ttk.Label(regla_frame, text='Multi w:').grid(row=5, column=2, sticky='e', padx=5)
+        self.entry_div_w = ttk.Entry(regla_frame, width=15, state='disabled')
+        self.entry_div_w.grid(row=5, column=3, sticky='w', padx=5)
+
+        # Botón y estado
+        ttk.Button(regla_frame, text='Añadir regla', command=self.agregar_regla)\
+            .grid(row=6, column=0, columnspan=4, pady=10)
         self.lbl_status = ttk.Label(regla_frame, text='', font=('Arial', 9, 'italic'))
-        self.lbl_status.grid(row=6, column=0, columnspan=4)
+        self.lbl_status.grid(row=7, column=0, columnspan=4)
 
         # Lista de reglas y borrar
         reglas_frame = ttk.LabelFrame(cont, text='Reglas de la Membrana Seleccionada')
@@ -116,7 +134,8 @@ class ConfiguradorPSistema(tk.Tk):
         reglas_frame.columnconfigure(0, weight=1)
         self.lista_reglas = tk.Listbox(reglas_frame, height=6, font=('Consolas',10), selectmode='single')
         self.lista_reglas.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
-        ttk.Button(reglas_frame, text='Borrar regla', command=self.borrar_regla).grid(row=1, column=0, sticky='ew', padx=5, pady=5)
+        ttk.Button(reglas_frame, text='Borrar regla', command=self.borrar_regla)\
+            .grid(row=1, column=0, sticky='ew', padx=5, pady=5)
 
         # Panel inferior: agregar membrana, generar aleatorio, guardar
         bottom = ttk.Frame(self)
@@ -132,14 +151,32 @@ class ConfiguradorPSistema(tk.Tk):
         return v.isdigit() or v == ''
 
     def _toggle_options(self):
-        if self.var_disolver.get():
-            self.var_crear.set(False)
-            self.entry_crear.configure(state='disabled')
-        elif self.var_crear.get():
+        # Al activar “Crear”, desactivo Disolver y Dividir
+        if self.var_crear.get():
             self.var_disolver.set(False)
+            self.var_dividir.set(False)
             self.entry_crear.configure(state='normal')
-        else:
+            self.entry_div_v.configure(state='disabled')
+            self.entry_div_w.configure(state='disabled')
+        # Al activar “Disolver”, desactivo Crear y Dividir
+        elif self.var_disolver.get():
+            self.var_crear.set(False)
+            self.var_dividir.set(False)
             self.entry_crear.configure(state='disabled')
+            self.entry_div_v.configure(state='disabled')
+            self.entry_div_w.configure(state='disabled')
+        # Al activar “Dividir”, desactivo Crear y Disolver
+        elif self.var_dividir.get():
+            self.var_crear.set(False)
+            self.var_disolver.set(False)
+            self.entry_crear.configure(state='disabled')
+            self.entry_div_v.configure(state='normal')
+            self.entry_div_w.configure(state='normal')
+        else:
+            # Ninguna opción: todo desactivado
+            self.entry_crear.configure(state='disabled')
+            self.entry_div_v.configure(state='disabled')
+            self.entry_div_w.configure(state='disabled')
 
     def _texto_membrana(self, m: Membrana) -> str:
         parts = [f"{k}:{v}" for k,v in sorted(m.resources.items())]
@@ -190,7 +227,18 @@ class ConfiguradorPSistema(tk.Tk):
                 else:
                     prod_items.append(f"{simb}×{cnt}")
             prod = ' '.join(prod_items)
-            texto = f"{idx+1}. Consumir: {consumir}" + (f" | Producir: {prod}" if prod else '') + f" | Prioridad: {r.priority}"
+            tipo = []
+            if r.division:
+                tipo.append('DIV')
+            if r.create_membranes:
+                tipo.append('CREA')
+            tipo_str = f"[{','.join(tipo)}] " if tipo else ''
+            texto = (
+                f"{idx+1}. {tipo_str}"
+                f"Consumir: {consumir}"
+                + (f" | Producir: {prod}" if prod else '')
+                + f" | Prioridad: {r.priority}"
+            )
             self.lista_reglas.insert('end', texto)
 
     def agregar_membrana(self):
@@ -245,7 +293,7 @@ class ConfiguradorPSistema(tk.Tk):
             messagebox.showerror('Error', 'Prioridad obligatoria')
             return
 
-        # Construir multiconjunto de producción según destino
+        # Construir multiconjunto de producción normal
         right = {}
         if der:
             parsed = self._parsear(der)
@@ -255,7 +303,36 @@ class ConfiguradorPSistema(tk.Tk):
             else:
                 right = parsed
 
-        regla = Regla(left=self._parsear(izq), right=right, priority=int(prio))
+        # Configurar creación de membrana
+        create_list = []
+        if self.var_crear.get():
+            target = self.entry_crear.get().strip()
+            if not target:
+                messagebox.showerror('Error', 'ID destino obligatorio para crear membrana')
+                return
+            content_ms = self._parsear(der) if der else {}
+            create_list = [(target, content_ms)]
+
+        # Configurar división de membrana
+        division_tuple = None
+        if self.var_dividir.get():
+            v_text = self.entry_div_v.get().strip()
+            w_text = self.entry_div_w.get().strip()
+            if not v_text or not w_text:
+                messagebox.showerror('Error', 'Debe proporcionar multiconjuntos v y w')
+                return
+            v_ms = self._parsear(v_text)
+            w_ms = self._parsear(w_text)
+            division_tuple = (v_ms, w_ms)
+
+        # Crear y añadir la regla
+        regla = Regla(
+            left=self._parsear(izq),
+            right=right,
+            priority=int(prio),
+            create_membranes=create_list,
+            division=division_tuple
+        )
         self.selected_membrane.reglas.append(regla)
         self.lbl_status.config(text='Regla añadida', foreground='green')
         self._actualizar_reglas()
@@ -268,8 +345,10 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_prioridad.insert(0, '1')
         self.var_disolver.set(False)
         self.var_crear.set(False)
+        self.var_dividir.set(False)
         self.entry_crear.configure(state='disabled')
-
+        self.entry_div_v.configure(state='disabled')
+        self.entry_div_w.configure(state='disabled')
 
     def generar_sistema_aleatorio(self):
         self.system = SistemaP()
@@ -325,32 +404,26 @@ class ConfiguradorPSistema(tk.Tk):
         if mid=='1':
             messagebox.showerror('Error','No borrar membrana raíz')
             return
-        # recopilar descendientes
         to_delete=[mid]
-         # primero borramos del sistema y del treeview
         for m in reversed(to_delete):
-            # eliminamos el objeto Membrana
             if hasattr(self.system, 'remove_membrane'):
                 self.system.remove_membrane(m)
             else:
                 del self.system.skin[m]
-            # eliminamos del TreeView
             self.tree.delete(m)
-       # ahora limpiamos todas las referencias en children
         for mem in self.system.skin.values():
-           mem.children = [c for c in mem.children if c not in to_delete]
-        # re selecciona raíz
+            mem.children = [c for c in mem.children if c not in to_delete]
         self.tree.selection_set('1'); self.on_select(None)
 
     def _parsear(self,s:str)->dict:
         d={}
-        for c in s: d[c]=d.get(c,0)+1
+        for c in s:
+            d[c]=d.get(c,0)+1
         return d
 
     def on_save(self):
         self.saved=True
         self.destroy()
-
 
 def configurar_sistema_p():
     app=ConfiguradorPSistema()
