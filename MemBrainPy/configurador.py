@@ -62,15 +62,13 @@ class ConfiguradorPSistema(tk.Tk):
 
         self.var_salida = tk.BooleanVar()
         ttk.Checkbutton(
-            tree_frame,
-            text='Membrana de salida',
+            tree_frame, text='Membrana de salida',
             variable=self.var_salida,
             command=lambda: self._on_toggle_salida()
         ).grid(row=1, column=0, sticky='w', padx=5)
 
         ttk.Button(
-            tree_frame,
-            text='Borrar membrana',
+            tree_frame, text='Borrar membrana',
             command=lambda: self.borrar_membrana()
         ).grid(row=2, column=0, sticky='w', padx=5, pady=5)
 
@@ -84,8 +82,7 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_simbolo.grid(row=0, column=1, sticky='ew', padx=5)
 
         ttk.Button(
-            res_frame,
-            text='Añadir recurso',
+            res_frame, text='Añadir recurso',
             command=lambda: self.agregar_recurso()
         ).grid(row=0, column=2, padx=5)
 
@@ -93,8 +90,7 @@ class ConfiguradorPSistema(tk.Tk):
         self.lista_recursos.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=5, pady=5)
 
         ttk.Button(
-            res_frame,
-            text='Borrar recurso',
+            res_frame, text='Borrar recurso',
             command=lambda: self.borrar_recurso()
         ).grid(row=2, column=0, columnspan=3, sticky='ew', padx=5)
 
@@ -235,6 +231,11 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_div_w.configure(state='normal' if self.var_dividir.get() else 'disabled')
         self.entry_prototipo.configure(state='normal' if self.var_prototipo.get() else 'disabled')
 
+        # Si estamos en modo dividir, no permitimos producir
+        self.entry_der.configure(state='disabled' if self.var_dividir.get() else 'normal')
+        if self.var_dividir.get():
+            self.entry_der.delete(0, 'end')
+
     def _texto_membrana(self, m: Membrana) -> str:
         parts = [f"{k}:{v}" for k,v in sorted(m.resources.items())]
         base = f"Membrana {m.id_mem} [{','.join(parts)}]"
@@ -362,6 +363,8 @@ class ConfiguradorPSistema(tk.Tk):
                 messagebox.showerror('Error', 'Multiconjuntos v y w obligatorios')
                 return
             division_tuple = (self._parsear(v_text), self._parsear(w_text))
+            # En división no debe haber producción
+            right = {}
 
         regla = Regla(
             left=self._parsear(izq),

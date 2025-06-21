@@ -183,9 +183,10 @@ def simular_lapso(
     consumos: Dict[str, Multiset] = {}
     to_create: List[Tuple[str, str, Multiset, List[Regla]]] = []
     to_dissolve: List[str] = []
+    division_dissolved: set[str] = set()    # ← identificadores de membranas que se disuelven por división
     seleccionados: Dict[str, List[Tuple[Regla, int]]] = {}
 
-    # Fase 1: Selección & Consumo
+    # — Fase 1: Selección y consumo —
     for mem in list(sistema.skin.values()):
         recursos_disp = deepcopy(mem.resources)
         aplicables = [r for r in mem.reglas if max_applications(recursos_disp, r) > 0]
@@ -201,65 +202,63 @@ def simular_lapso(
                 seleccionados[mem.id_mem] = elegido
 
                 for regla, cnt in elegido:
-                    # --- División estructural ---
+                    # — División estructural —
                     if regla.division:
                         v, w = regla.division
+                        parent_id = mem.parent
+                        # restamos consumo de la membrana original
                         base = sub_multiset(mem.resources, multiset_times(regla.left, cnt))
+
                         to_dissolve.append(mem.id_mem)
+                        division_dissolved.add(mem.id_mem)
+
                         for _ in range(cnt):
                             id1 = f"{mem.id_mem}_{uuid.uuid4().hex[:8]}"
                             id2 = f"{mem.id_mem}_{uuid.uuid4().hex[:8]}"
                             r1 = add_multiset(base, v)
                             r2 = add_multiset(base, w)
                             child_rules = [deepcopy(r) for r in mem.reglas]
-                            to_create.append((mem.parent, id1, r1, child_rules))
-                            to_create.append((mem.parent, id2, r2, child_rules))
+                            # colgamos las nuevas hijas de la misma membrana padre
+                            to_create.append((parent_id, id1, r1, child_rules))
+                            to_create.append((parent_id, id2, r2, child_rules))
+                        # nos saltamos consumo/producción habitual
                         continue
 
-                    # --- Consumo de objetos ---
+                    # — Consumo de objetos (reglas no estructurales) —
                     consumo_total = multiset_times(regla.left, cnt)
                     recursos_disp = sub_multiset(recursos_disp, consumo_total)
 
-                    # --- Producción de objetos ---
+                    # — Producción de objetos —
                     for simb, num in regla.right.items():
-                        if simb.endswith("_out"):
-                            padre_id = mem.parent
-                            base_sym = simb[:-4]
-                            if padre_id:
-                                producciones[padre_id][base_sym] = (
-                                    producciones[padre_id].get(base_sym, 0) + num * cnt
-                                )
-                        elif "_in_" in simb:
-                            base_sym, target = simb.split("_in_")
-                            if target in sistema.skin:
-                                producciones[target][base_sym] = (
-                                    producciones[target].get(base_sym, 0) + num * cnt
-                                )
-                        else:
-                            producciones[mem.id_mem][simb] = (
-                                producciones[mem.id_mem].get(simb, 0) + num * cnt
-                            )
+                        producciones[mem.id_mem][simb] = (
+                            producciones[mem.id_mem].get(simb, 0) + num * cnt
+                        )
 
-                    # --- Creación de membranas ---
+                    # — Creación de membranas —
                     for _ in range(cnt):
                         for proto_label, init_res in regla.create_membranes:
-                            # Generar ID único y recursos iniciales
                             new_id = f"{mem.id_mem}_{proto_label}_{uuid.uuid4().hex[:8]}"
                             res_copy = deepcopy(init_res)
-                            # Obtener reglas del prototipo
                             if proto_label not in sistema.prototypes:
-                                raise ValueError(f"No existe prototipo registrado para etiqueta '{proto_label}'")
-                            rules_list = [deepcopy(r) for r in sistema.prototypes[proto_label].reglas]
+                                raise ValueError(
+                                    f"No existe prototipo para etiqueta '{proto_label}'"
+                                )
+                            rules_list = [
+                                deepcopy(rp) for rp in sistema.prototypes[proto_label].reglas
+                            ]
                             to_create.append((mem.id_mem, new_id, res_copy, rules_list))
 
         consumos[mem.id_mem] = recursos_disp
 
-    # Fase 2: Aplicar producciones
+    # — Fase 2: Aplicar producciones —
+    #   **Omitimos la producción de membranas que se disuelven por división**
     for mem_id, prod in producciones.items():
+        if mem_id in division_dissolved:
+            continue
         base = consumos.get(mem_id, sistema.skin[mem_id].resources)
         sistema.skin[mem_id].resources = add_multiset(base, prod)
 
-    # Fase 3: Disoluciones
+    # — Fase 3: Disoluciones —
     root_id = sistema.output_membrane
     dissolved_list: List[str] = []
     for dis_id in to_dissolve:
@@ -268,7 +267,12 @@ def simular_lapso(
         padre_id = sistema.skin[dis_id].parent
         if padre_id:
             padre = sistema.skin[padre_id]
-            padre.resources = add_multiset(padre.resources, sistema.skin[dis_id].resources)
+            # sólo propagamos recursos si NO es división estructural
+            if dis_id not in division_dissolved:
+                padre.resources = add_multiset(
+                    padre.resources, sistema.skin[dis_id].resources
+                )
+            # reubicamos hijos
             for hijo_id in sistema.skin[dis_id].children:
                 sistema.skin[hijo_id].parent = padre_id
                 padre.children.append(hijo_id)
@@ -276,10 +280,14 @@ def simular_lapso(
         del sistema.skin[dis_id]
         dissolved_list.append(dis_id)
 
-    # Fase 4: Creaciones
+    # — Fase 4: Creaciones —
     created_list: List[Tuple[str, str]] = []
     for parent_id, new_id, res, rules_list in to_create:
-        nueva = Membrana(id_mem=new_id, resources=res, reglas=[deepcopy(r) for r in rules_list])
+        nueva = Membrana(
+            id_mem=new_id,
+            resources=res,
+            reglas=[deepcopy(r) for r in rules_list]
+        )
         sistema.add_membrane(nueva, parent_id)
         created_list.append((parent_id, new_id))
 
@@ -290,6 +298,8 @@ def simular_lapso(
         created=created_list,
         dissolved=dissolved_list
     )
+
+
 
 
 # ---------------------- REGISTRAR ESTADÍSTICAS MÚLTIPLES -----------------------
