@@ -2,14 +2,29 @@ from __future__ import annotations
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, DefaultDict
+from typing import Dict, List, Optional, Tuple, DefaultDict, Set
 import random
 import collections
 import pandas as pd
-
+from enum import Enum
+from collections import defaultdict
+import re
 # ----------------------------- TIPOS AUXILIARES ------------------------------
 
 Multiset = Dict[str, int]
+
+
+class Direction(Enum):
+    NORMAL = "normal"   # producción dentro de la misma membrana
+    IN     = "in"       # producción dirigida a una membrana hija concreta
+    OUT    = "out"      # producción dirigida a la membrana padre
+
+@dataclass
+class Production:
+    symbol: str
+    count: int = 1
+    direction: Direction = Direction.NORMAL
+    target: Optional[str] = None   # sólo válido si direction == IN
 
 @dataclass
 class LapsoResult:
@@ -62,17 +77,17 @@ def max_applications(resources: Multiset, rule: Regla) -> int:
 @dataclass
 class Regla:
     """
-    Una regla de evolución o estructural de un Sistema P.
+    Regla de evolución o estructural de un Sistema P, con producciones tipadas.
     - left: multiconjunto de entrada (se consume).
-    - right: multiconjunto de salida (objetos).
+    - productions: lista de objetos Production que indican qué y dónde producir.
     - priority: para resolver concurrencias.
     - create_membranes: lista de (etiqueta_prototipo, recursos_iniciales).
     - dissolve_membranes: etiquetas a disolver (no usado aquí).
     - division: opcional (v, w) para regla de división.
     """
     left: Multiset
-    right: Multiset
-    priority: int
+    productions: List[Production] = field(default_factory=list)
+    priority: int = 0
     create_membranes: List[Tuple[str, Multiset]] = field(default_factory=list)
     dissolve_membranes: List[str] = field(default_factory=list)
     division: Optional[Tuple[Multiset, Multiset]] = None
@@ -81,10 +96,16 @@ class Regla:
         return sum(self.left.values())
 
     def __repr__(self) -> str:
+        prods = ", ".join(
+            f"{p.count}×{p.symbol}"
+            + (f"_in({p.target})" if p.direction == Direction.IN else "")
+            + (f"_out"       if p.direction == Direction.OUT else "")
+            for p in self.productions
+        )
         return (
-            f"Regla(left={self.left}, right={self.right}, "
-            f"priority={self.priority}, create={self.create_membranes}, "
-            f"dissolve={self.dissolve_membranes}, division={self.division})"
+            f"Regla(left={self.left}, prods=[{prods}], "
+            f"prio={self.priority}, create={self.create_membranes}, "
+            f"dissolve={self.dissolve_membranes}, div={self.division})"
         )
 
 @dataclass
@@ -176,15 +197,14 @@ def simular_lapso(
     sistema: SistemaP,
     rng_seed: Optional[int] = None
 ) -> LapsoResult:
-    modo = "max_paralelo"
     rng = random.Random(rng_seed)
 
-    # Estructuras temporales
-    producciones: Dict[str, Multiset] = {mid: {} for mid in sistema.skin}
-    consumos:     Dict[str, Multiset] = {}
-    to_create:    List[Tuple[str, str, Multiset, List[Regla]]] = []
+    # — Estructuras de recogida —
+    producciones: Dict[str, Dict[str,int]] = {mid: {} for mid in sistema.skin}
+    consumos:     Dict[str, Dict[str,int]] = {}
+    to_create:    List[Tuple[str, str, Dict[str,int], List[Regla]]] = []
     to_dissolve:  List[str] = []
-    division_dissolved: set[str] = set()
+    division_dissolved: Set[str] = set()
     seleccionados: Dict[str, List[Tuple[Regla, int]]] = {}
 
     # — Fase 1: Selección y Consumo —
@@ -192,10 +212,10 @@ def simular_lapso(
         recursos_disp = deepcopy(mem.resources)
         aplicables = [r for r in mem.reglas if max_applications(recursos_disp, r) > 0]
 
-        if modo == "max_paralelo" and aplicables:
-            max_prio   = max(r.priority for r in aplicables)
-            top_rules  = [r for r in aplicables if r.priority == max_prio]
-            maxsets    = generar_maximales(top_rules, recursos_disp)
+        if aplicables:
+            max_prio  = max(r.priority for r in aplicables)
+            top_rules = [r for r in aplicables if r.priority == max_prio]
+            maxsets   = generar_maximales(top_rules, recursos_disp)
 
             if maxsets:
                 rng.shuffle(maxsets)
@@ -205,7 +225,7 @@ def simular_lapso(
                 for regla, cnt in elegido:
                     # — División estructural —
                     if regla.division:
-                        v, w     = regla.division
+                        v, w      = regla.division
                         parent_id = mem.parent
                         base      = sub_multiset(mem.resources, multiset_times(regla.left, cnt))
 
@@ -215,36 +235,41 @@ def simular_lapso(
                         for _ in range(cnt):
                             id1 = f"{mem.id_mem}_{uuid.uuid4().hex[:8]}"
                             id2 = f"{mem.id_mem}_{uuid.uuid4().hex[:8]}"
-                            r1 = add_multiset(base, v)
-                            r2 = add_multiset(base, w)
+                            r1  = add_multiset(base, v)
+                            r2  = add_multiset(base, w)
                             child_rules = [deepcopy(r) for r in mem.reglas]
                             to_create.append((parent_id, id1, r1, child_rules))
                             to_create.append((parent_id, id2, r2, child_rules))
-                        # No seguimos con producción ni creación secundaria
                         continue
 
                     # — Consumo de objetos —
                     consumo_total = multiset_times(regla.left, cnt)
                     recursos_disp = sub_multiset(recursos_disp, consumo_total)
 
-                    # — Producción de objetos —
-                    # Sólo si NO es una regla de creación de membrana
-                    if not regla.create_membranes:
-                        for simb, num in regla.right.items():
-                            producciones[mem.id_mem][simb] = (
-                                producciones[mem.id_mem].get(simb, 0) + num * cnt
-                            )
+                    # — Producción tipada según regla.productions —
+                    for prod in regla.productions:
+                        total = prod.count * cnt
+                        if prod.direction == Direction.NORMAL:
+                            m = producciones[mem.id_mem]
+                            m[prod.symbol] = m.get(prod.symbol, 0) + total
+
+                        elif prod.direction == Direction.IN and prod.target:
+                            m2 = producciones.setdefault(prod.target, {})
+                            m2[prod.symbol] = m2.get(prod.symbol, 0) + total
+
+                        elif prod.direction == Direction.OUT:
+                            padre = mem.parent
+                            if padre:
+                                m0 = producciones.setdefault(padre, {})
+                                m0[prod.symbol] = m0.get(prod.symbol, 0) + total
 
                     # — Creación de membranas —
                     for _ in range(cnt):
                         for proto_label, init_res in regla.create_membranes:
-                            new_id  = f"{mem.id_mem}_{proto_label}_{uuid.uuid4().hex[:8]}"
+                            new_id   = f"{mem.id_mem}_{proto_label}_{uuid.uuid4().hex[:8]}"
                             res_copy = deepcopy(init_res)
-                            prot    = sistema.prototypes.get(proto_label)
-                            if prot is None:
-                                rules_list: List[Regla] = []
-                            else:
-                                rules_list = [deepcopy(rp) for rp in prot.reglas]
+                            prot     = sistema.prototypes.get(proto_label)
+                            rules_list = [] if prot is None else [deepcopy(rp) for rp in prot.reglas]
                             to_create.append((mem.id_mem, new_id, res_copy, rules_list))
 
         consumos[mem.id_mem] = recursos_disp
@@ -265,12 +290,8 @@ def simular_lapso(
         padre_id = sistema.skin[dis_id].parent
         if padre_id:
             padre = sistema.skin[padre_id]
-            # Si NO fue división, propagamos recursos
             if dis_id not in division_dissolved:
-                padre.resources = add_multiset(
-                    padre.resources, sistema.skin[dis_id].resources
-                )
-            # Reubicar hijos
+                padre.resources = add_multiset(padre.resources, sistema.skin[dis_id].resources)
             for hijo_id in sistema.skin[dis_id].children:
                 sistema.skin[hijo_id].parent = padre_id
                 padre.children.append(hijo_id)
@@ -296,6 +317,9 @@ def simular_lapso(
         created=created_list,
         dissolved=dissolved_list
     )
+
+
+
 
 
 

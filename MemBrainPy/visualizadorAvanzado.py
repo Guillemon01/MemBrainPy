@@ -17,11 +17,31 @@ from .SistemaP import (
     SistemaP,
     Membrana,
     Regla,
+    Production,        # ← añadido
+    Direction,         # ← añadido
     simular_lapso,
     generar_maximales,
     max_applications,
     LapsoResult,
 )
+
+
+def _format_productions(r: Regla) -> str:
+    """
+    Formatea la lista tipada r.productions para mostrar
+    'A', 'B:2', 'C_in(X)', 'D_out', etc.
+    """
+    partes: List[str] = []
+    for p in r.productions:
+        # Símbolo y cantidad
+        sym = p.symbol if p.count == 1 else f"{p.symbol}:{p.count}"
+        # Dirección
+        if p.direction == Direction.IN and p.target:
+            sym += f"_in({p.target})"
+        elif p.direction == Direction.OUT:
+            sym += "_out"
+        partes.append(sym)
+    return ",".join(partes)
 
 
 def dibujar_membrana(
@@ -80,10 +100,10 @@ def dibujar_reglas(fig: plt.Figure, sistema: SistemaP) -> None:
     lineas: List[str] = []
     for m in sistema.skin.values():
         for r in m.reglas:
-            consumo = ",".join(f"{k}:{v}" for k, v in r.left.items())
-            produccion = ",".join(f"{k}:{v}" for k, v in r.right.items())
-            crea = f" crea={r.create_membranes}" if r.create_membranes else ""
-            dis = f" disuelve={r.dissolve_membranes}" if r.dissolve_membranes else ""
+            consumo    = ",".join(f"{k}:{v}" for k, v in r.left.items())
+            produccion = _format_productions(r)
+            crea = f" crea={r.create_membranes}"    if r.create_membranes    else ""
+            dis  = f" disuelve={r.dissolve_membranes}" if r.dissolve_membranes else ""
             lineas.append(
                 f"{m.id_mem}: {consumo}->{produccion} (Pri={r.priority}){crea}{dis}"
             )
@@ -102,12 +122,13 @@ def format_maximal(
     for mid, combo in seleccion.items():
         partes: List[str] = []
         for regla, cnt in combo:
+            # Consumo
             cons = ",".join(
-                k if v == 1 else f"{k}:{v}" for k, v in regla.left.items()
+                k if v == 1 else f"{k}:{v}"
+                for k, v in regla.left.items()
             )
-            prod = ",".join(
-                k if v == 1 else f"{k}:{v}" for k, v in regla.right.items()
-            )
+            # Producción tipada
+            prod = _format_productions(regla)
             partes.append(f"{cnt}×({cons}→{prod})")
         lineas.append(f"{mid}: " + "; ".join(partes))
     return "\n".join(lineas)
@@ -195,8 +216,10 @@ def simular_y_visualizar(
     dibujar_estado(0)
     plt.show(block=True)
 
+
 # Alias para facilitar uso directo desde el paquete
 visualizadorAvanzado = simular_y_visualizar
+
 
 def simular_varios_y_visualizar(
     sistemas: List[SistemaP],
@@ -268,11 +291,12 @@ def simular_varios_y_visualizar(
                         w = (0.7/numt)-0.02
                         h = 0.7
                         dibujar_membrana(ax, m, est, xb, yb, w, h)
+                # Ahora usamos _format_productions en lugar de r.right
                 lineas: List[str] = []
                 for m in est.skin.values():
                     for r in m.reglas:
-                        c = ','.join(f"{k}:{v}" for k,v in r.left.items())
-                        p = ','.join(f"{k}:{v}" for k,v in r.right.items())
+                        c = ','.join(f"{k}:{v}" for k, v in r.left.items())
+                        p = _format_productions(r)
                         cr = f" crea={r.create_membranes}" if r.create_membranes else ''
                         ds = f" disuelve={r.dissolve_membranes}" if r.dissolve_membranes else ''
                         lineas.append(f"{m.id_mem}: {c}->{p} (Pri={r.priority}){cr}{ds}")

@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import re
 import random
-from .SistemaP import SistemaP, Membrana, Regla
+from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
 
 class ConfiguradorPSistema(tk.Tk):
     def __init__(self):
@@ -24,6 +24,9 @@ class ConfiguradorPSistema(tk.Tk):
         self.mem_counter = 0
         self.saved = False
         self.exit_membrane_id = None
+
+        # Nuevo: variable para tipo de regla
+        self.rule_type_var = tk.StringVar(value='normal')  # ← añadido
 
         # Cierre
         self.protocol('WM_DELETE_WINDOW', self._on_close)
@@ -105,17 +108,33 @@ class ConfiguradorPSistema(tk.Tk):
         self.entry_izq = ttk.Entry(regla_frame)
         self.entry_izq.grid(row=0, column=1, sticky='ew', padx=5)
 
-        # Producir (objetos normales)
+        # Producir
         ttk.Label(regla_frame, text='Producir:').grid(row=1, column=0, sticky='e', padx=5)
         self.entry_der = ttk.Entry(regla_frame)
         self.entry_der.grid(row=1, column=1, sticky='ew', padx=5)
 
+        # Nuevo: Tipo de regla (Normal / IN / OUT)
+        ttk.Label(regla_frame, text='Tipo de regla:').grid(row=2, column=0, sticky='e', padx=5)  # ← añadido
+        tipos_frame = ttk.Frame(regla_frame)  # ← añadido
+        tipos_frame.grid(row=2, column=1, columnspan=2, sticky='w')  # ← añadido
+        for val, txt in [('normal', 'Normal'), ('in', 'IN'), ('out', 'OUT')]:
+            ttk.Radiobutton(
+                tipos_frame, text=txt, value=val,
+                variable=self.rule_type_var,
+                command=self._on_rule_type_change  # ← añadido
+            ).pack(side='left', padx=2)  # ← añadido
+
+        # Nuevo: entrada para membrana destino en regla IN
+        ttk.Label(regla_frame, text='Membrana destino:').grid(row=3, column=0, sticky='e', padx=5)  # ← añadido
+        self.entry_target = ttk.Entry(regla_frame, state='disabled')  # ← añadido
+        self.entry_target.grid(row=3, column=1, sticky='w', padx=5)  # ← añadido
+
         # Prioridad
-        ttk.Label(regla_frame, text='Prioridad:').grid(row=2, column=0, sticky='e', padx=5)
+        ttk.Label(regla_frame, text='Prioridad:').grid(row=4, column=0, sticky='e', padx=5)
         vcmd = (self.register(self._validate_entero), '%P')
         self.entry_prioridad = ttk.Entry(regla_frame, validate='key', validatecommand=vcmd)
         self.entry_prioridad.insert(0, '1')
-        self.entry_prioridad.grid(row=2, column=1, sticky='ew', padx=5)
+        self.entry_prioridad.grid(row=4, column=1, sticky='ew', padx=5)
 
         # Opciones estructurales
         self.var_disolver   = tk.BooleanVar()
@@ -126,49 +145,49 @@ class ConfiguradorPSistema(tk.Tk):
         ttk.Checkbutton(
             regla_frame, text='Disolver membrana',
             variable=self.var_disolver, command=lambda: self._toggle_options()
-        ).grid(row=3, column=0, sticky='w', padx=5)
+        ).grid(row=5, column=0, sticky='w', padx=5)
 
         ttk.Checkbutton(
             regla_frame, text='Crear membrana',
             variable=self.var_crear, command=lambda: self._toggle_options()
-        ).grid(row=3, column=1, sticky='w', padx=5)
+        ).grid(row=5, column=1, sticky='w', padx=5)
 
         ttk.Checkbutton(
             regla_frame, text='Dividir membrana',
             variable=self.var_dividir, command=lambda: self._toggle_options()
-        ).grid(row=3, column=2, sticky='w', padx=5)
+        ).grid(row=5, column=2, sticky='w', padx=5)
 
         ttk.Checkbutton(
             regla_frame, text='Regla prototipo',
             variable=self.var_prototipo, command=lambda: self._toggle_options()
-        ).grid(row=3, column=3, sticky='w', padx=5)
+        ).grid(row=5, column=3, sticky='w', padx=5)
 
         # Parámetros para creación
-        ttk.Label(regla_frame, text='ID Membrana (crear):').grid(row=4, column=0, sticky='e', padx=5)
+        ttk.Label(regla_frame, text='ID Membrana (crear):').grid(row=6, column=0, sticky='e', padx=5)
         self.entry_crear = ttk.Entry(regla_frame, width=10, state='disabled')
-        self.entry_crear.grid(row=4, column=1, sticky='w', padx=5)
+        self.entry_crear.grid(row=6, column=1, sticky='w', padx=5)
 
         # Parámetros para división
-        ttk.Label(regla_frame, text='Multi v:').grid(row=4, column=2, sticky='e', padx=5)
+        ttk.Label(regla_frame, text='Multi v:').grid(row=6, column=2, sticky='e', padx=5)
         self.entry_div_v = ttk.Entry(regla_frame, width=15, state='disabled')
-        self.entry_div_v.grid(row=4, column=3, sticky='w', padx=5)
-        ttk.Label(regla_frame, text='Multi w:').grid(row=5, column=2, sticky='e', padx=5)
+        self.entry_div_v.grid(row=6, column=3, sticky='w', padx=5)
+        ttk.Label(regla_frame, text='Multi w:').grid(row=7, column=2, sticky='e', padx=5)
         self.entry_div_w = ttk.Entry(regla_frame, width=15, state='disabled')
-        self.entry_div_w.grid(row=5, column=3, sticky='w', padx=5)
+        self.entry_div_w.grid(row=7, column=3, sticky='w', padx=5)
 
         # Parámetro para regla prototipo
-        ttk.Label(regla_frame, text='ID Protótipo:').grid(row=5, column=0, sticky='e', padx=5)
+        ttk.Label(regla_frame, text='ID Protótipo:').grid(row=7, column=0, sticky='e', padx=5)
         self.entry_prototipo = ttk.Entry(regla_frame, width=10, state='disabled')
-        self.entry_prototipo.grid(row=5, column=1, sticky='w', padx=5)
+        self.entry_prototipo.grid(row=7, column=1, sticky='w', padx=5)
 
         # Botón añadir regla
         ttk.Button(
             regla_frame, text='Añadir regla',
             command=lambda: self.agregar_regla()
-        ).grid(row=6, column=0, columnspan=4, pady=10)
+        ).grid(row=8, column=0, columnspan=4, pady=10)
 
         self.lbl_status = ttk.Label(regla_frame, text='', font=('Arial', 9, 'italic'))
-        self.lbl_status.grid(row=7, column=0, columnspan=4)
+        self.lbl_status.grid(row=9, column=0, columnspan=4)
 
         # Lista de reglas de la membrana seleccionada
         reglas_frame = ttk.LabelFrame(cont, text='Reglas de la Membrana Seleccionada')
@@ -208,6 +227,14 @@ class ConfiguradorPSistema(tk.Tk):
 
     def _validate_entero(self, v):
         return v.isdigit() or v == ''
+
+    def _on_rule_type_change(self):  # ← añadido
+        rt = self.rule_type_var.get()
+        if rt == 'in':
+            self.entry_target.configure(state='normal')
+        else:
+            self.entry_target.delete(0, 'end')
+            self.entry_target.configure(state='disabled')
 
     def _toggle_options(self):
         # Ajustar flags mutuamente excluyentes
@@ -276,15 +303,24 @@ class ConfiguradorPSistema(tk.Tk):
             self.selected_membrane.reglas
         )
         for idx, r in enumerate(target_list):
-            consumir = ' '.join(f"{s}×{c}" for s,c in r.left.items())
-            prod = ' '.join(f"{s}×{c}" for s,c in r.right.items())
+            # Mostrar producciones tipadas
+            prod_parts = []
+            for p in r.productions:
+                part = f"{p.symbol}×{p.count}"
+                if p.direction == Direction.IN and p.target:
+                    part += f"→{p.target}"
+                elif p.direction == Direction.OUT:
+                    part += "→OUT"
+                prod_parts.append(part)
+            prod_text = " ".join(prod_parts)
             tipos = []
             if r.division: tipos.append('DIV')
             if r.create_membranes: tipos.append('CREA')
+            if self.var_disolver.get(): tipos.append('DIS')
             tipo_str = f"[{','.join(tipos)}] " if tipos else ''
             texto = (
-                f"{idx+1}. {tipo_str}Consumir: {consumir}"
-                + (f" | Producir: {prod}" if prod else '')
+                f"{idx+1}. {tipo_str}Consumir: {' '.join(f'{s}×{c}' for s,c in r.left.items())}"
+                + (f" | Producir: {prod_text}" if prod_text else '')
                 + f" | Prioridad: {r.priority}"
             )
             self.lista_reglas.insert('end', texto)
@@ -341,11 +377,34 @@ class ConfiguradorPSistema(tk.Tk):
             messagebox.showerror('Error', 'Prioridad obligatoria')
             return
 
-        # Construcción de multiconjuntos
+        # Construcción de multiconjuntos de producción
         der = self.entry_der.get().strip()
-        right = self._parsear(der) if der else {}
+        right_ms = self._parsear(der) if der else {}
 
-        # Crear membrana
+        # Construir lista de Production según tipo
+        productions: list[Production] = []
+        rt = self.rule_type_var.get()
+        if rt == 'in':
+            target = self.entry_target.get().strip()
+            if not target:
+                messagebox.showerror('Error', 'Membrana destino obligatoria para IN')
+                return
+            for sym, cnt in right_ms.items():
+                productions.append(
+                    Production(symbol=sym, count=cnt, direction=Direction.IN, target=target)
+                )
+        elif rt == 'out':
+            for sym, cnt in right_ms.items():
+                productions.append(
+                    Production(symbol=sym, count=cnt, direction=Direction.OUT)
+                )
+        else:  # normal
+            for sym, cnt in right_ms.items():
+                productions.append(
+                    Production(symbol=sym, count=cnt, direction=Direction.NORMAL)
+                )
+
+        # Crear membrana (igual que antes)
         create_list = []
         if self.var_crear.get():
             label = self.entry_crear.get().strip()
@@ -354,7 +413,7 @@ class ConfiguradorPSistema(tk.Tk):
                 return
             create_list = [(label, self._parsear(der) if der else {})]
 
-        # División de membrana
+        # División de membrana (igual que antes)
         division_tuple = None
         if self.var_dividir.get():
             v_text = self.entry_div_v.get().strip()
@@ -363,14 +422,20 @@ class ConfiguradorPSistema(tk.Tk):
                 messagebox.showerror('Error', 'Multiconjuntos v y w obligatorios')
                 return
             division_tuple = (self._parsear(v_text), self._parsear(w_text))
-            # En división no debe haber producción
-            right = {}
+            productions = []  # no hay producciones si dividimos
 
+        # Disolución (si corresponde)
+        dissolve_list: list[str] = []
+        if self.var_disolver.get():
+            dissolve_list = [self.selected_membrane.id_mem]
+
+        # Crear la regla con la nueva firma
         regla = Regla(
             left=self._parsear(izq),
-            right=right,
+            productions=productions,
             priority=int(prio),
             create_membranes=create_list,
+            dissolve_membranes=dissolve_list,
             division=division_tuple
         )
 
@@ -387,11 +452,15 @@ class ConfiguradorPSistema(tk.Tk):
         self._actualizar_reglas()
 
         # Limpiar campos
-        for w in (self.entry_izq, self.entry_der, self.entry_prioridad,
-                  self.entry_crear, self.entry_div_v, self.entry_div_w,
-                  self.entry_prototipo):
+        for w in (
+            self.entry_izq, self.entry_der, self.entry_prioridad,
+            self.entry_crear, self.entry_div_v, self.entry_div_w,
+            self.entry_prototipo, self.entry_target  # ← añadido
+        ):
             w.delete(0, 'end')
         self.entry_prioridad.insert(0, '1')
+        self.rule_type_var.set('normal')      # ← añadido
+        self._on_rule_type_change()           # ← añadido
         self.var_disolver.set(False)
         self.var_crear.set(False)
         self.var_dividir.set(False)
@@ -419,7 +488,9 @@ class ConfiguradorPSistema(tk.Tk):
                 left = {t: random.randint(1,3) for t in random.sample(letras, random.randint(1,min(3,len(letras))))}
                 prod_count = random.randint(0,3)
                 right = {t: random.randint(1,3) for t in random.sample(letras, prod_count)}
-                m.reglas.append(Regla(left=left, right=right, priority=random.randint(1,5)))
+                # Por simplicidad, todas las reglas aleatorias son normales
+                prods = [Production(symbol=t, count=n, direction=Direction.NORMAL) for t,n in right.items()]
+                m.reglas.append(Regla(left=left, productions=prods, priority=random.randint(1,5)))
         self.exit_membrane_id = random.choice(ids) if ids else None
         self.system.output_membrane = self.exit_membrane_id
         if ids:
