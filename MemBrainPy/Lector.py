@@ -9,9 +9,9 @@ y construir un objeto SistemaP con membranas, recursos y reglas.
 
 import re
 from typing import Dict, List, Tuple, Optional
-
 from .SistemaP import SistemaP, Membrana, Regla
 
+__all__ =["leer_sistema"]
 
 def parse_multiset(s: str) -> Dict[str, int]:
     """

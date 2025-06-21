@@ -18,5 +18,11 @@ for finder, module_name, is_pkg in pkgutil.iter_modules(__path__):
     # si el módulo define __all__, úsalo; si no, exporta todo lo que no empiece por "_"
     public_symbols = getattr(module, "__all__", [n for n in dir(module) if not n.startswith("_")])
     for sym in public_symbols:
-        globals()[sym] = getattr(module, sym)
+        if sym == module_name:
+            # evitamos sobrescribir el propio paquete con un símbolo del mismo nombre
+            continue
+        attr = getattr(module, sym, None)
+        if attr is None:
+            continue
+        globals()[sym] = attr
         __all__.append(sym)

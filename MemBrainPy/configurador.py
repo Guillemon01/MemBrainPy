@@ -4,6 +4,12 @@ import re
 import random
 from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
 
+
+__all__ = [
+    'configurar_sistema_p',
+]
+
+
 class ConfiguradorPSistema(tk.Tk):
     def __init__(self):
         super().__init__()

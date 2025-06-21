@@ -1,12 +1,11 @@
-"""
-funciones.py
+'''funciones.py
 
 Colección de funciones que generan Sistemas P específicos (división, suma, resta, etc.).
 Utilizan el módulo 'SistemaP' para construir la estructura de membranas y reglas.
-"""
+'''
+from typing import Dict, Optional
 
-from typing import Dict
-from .SistemaP import SistemaP, Membrana, Regla
+from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
 
 
 def division(n: int, divisor: int) -> SistemaP:
@@ -26,13 +25,13 @@ def division(n: int, divisor: int) -> SistemaP:
     # Regla de prioridad 2: agrupa bloques de tamaño `divisor`
     regla_div = Regla(
         left={"a": divisor},
-        right={"b_out": 1},
+        productions=[Production(symbol="b", count=1, direction=Direction.OUT)],
         priority=2
     )
     # Regla de prioridad 1: consume 'a' restante → produce 'r'
     regla_res = Regla(
         left={"a": 1},
-        right={"r_out": 1},
+        productions=[Production(symbol="r", count=1, direction=Direction.OUT)],
         priority=1
     )
     m1.add_regla(regla_div)
@@ -56,12 +55,12 @@ def suma(n: int, m: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n, "b": m})
     regla_a = Regla(
         left={"a": 1},
-        right={"c_out": 1},
+        productions=[Production(symbol="c", count=1, direction=Direction.OUT)],
         priority=1
     )
     regla_b = Regla(
         left={"b": 1},
-        right={"c_out": 1},
+        productions=[Production(symbol="c", count=1, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_a)
@@ -86,17 +85,17 @@ def resta(n: int, m: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n, "b": m})
     regla_emp = Regla(
         left={"a": 1, "b": 1},
-        right={},  # empareja sin producir
+        productions=[],  # empareja sin producir
         priority=3
     )
     regla_a = Regla(
         left={"a": 1},
-        right={"d_out": 1},
+        productions=[Production(symbol="d", count=1, direction=Direction.OUT)],
         priority=2
     )
     regla_b = Regla(
         left={"b": 1},
-        right={"e_out": 1},
+        productions=[Production(symbol="e", count=1, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_emp)
@@ -121,12 +120,12 @@ def paridad(n: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n})
     regla_emp = Regla(
         left={"a": 2},
-        right={},  # empareja pares de 'a'
+        productions=[],  # empareja pares de 'a'
         priority=2
     )
     regla_i = Regla(
         left={"a": 1},
-        right={"i_out": 1},
+        productions=[Production(symbol="i", count=1, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_emp)
@@ -149,7 +148,7 @@ def duplicar(n: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n})
     regla_dup = Regla(
         left={"a": 1},
-        right={"b_out": 2},
+        productions=[Production(symbol="b", count=2, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_dup)
@@ -174,22 +173,22 @@ def comparacion(n: int, m: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n, "b": m})
     regla_emp = Regla(
         left={"a": 1, "b": 1},
-        right={},  # empareja sin producir
+        productions=[],  # empareja sin producir
         priority=3
     )
     regla_a = Regla(
         left={"a": 1},
-        right={"g_out": 1},
+        productions=[Production(symbol="g", count=1, direction=Direction.OUT)],
         priority=2
     )
     regla_b = Regla(
         left={"b": 1},
-        right={"l_out": 1},
+        productions=[Production(symbol="l", count=1, direction=Direction.OUT)],
         priority=2
     )
     regla_e = Regla(
         left={},
-        right={"e_out": 1},
+        productions=[Production(symbol="e", count=1, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_emp)
@@ -215,12 +214,12 @@ def modulo(n: int, m: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n})
     regla_emp = Regla(
         left={"a": m},
-        right={},  # descarta bloques completos de tamaño m
+        productions=[],  # descarta bloques completos de tamaño m
         priority=2
     )
     regla_r = Regla(
         left={"a": 1},
-        right={"r_out": 1},
+        productions=[Production(symbol="r", count=1, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_emp)
@@ -244,12 +243,12 @@ def umbral(n: int, k: int) -> SistemaP:
     mem = Membrana(id_mem="m1", resources={"a": n})
     regla_t = Regla(
         left={"a": k},
-        right={"t_out": 1},
+        productions=[Production(symbol="t", count=1, direction=Direction.OUT)],
         priority=2
     )
     regla_f = Regla(
         left={},
-        right={"f_out": 1},
+        productions=[Production(symbol="f", count=1, direction=Direction.OUT)],
         priority=1
     )
     mem.add_regla(regla_t)

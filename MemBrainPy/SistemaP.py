@@ -334,8 +334,10 @@ def registrar_estadisticas(
     rng_seed: Optional[int] = None,
     csv_path: Optional[str] = None
 ) -> pd.DataFrame:
-    all_results = [simular_lapso(sistema, rng_seed=(rng_seed + i) if rng_seed is not None else None)
-                   for i in range(lapsos)]
+    all_results = [
+        simular_lapso(sistema, rng_seed=(rng_seed + i) if rng_seed is not None else None)
+        for i in range(lapsos)
+    ]
 
     rows = []
     for idx_l, lapso in enumerate(all_results, start=1):
@@ -346,7 +348,7 @@ def registrar_estadisticas(
             prod = lapso.producciones.get(mem_id, {})
             apps = lapso.seleccionados.get(mem_id, [])
             apps_str = ";".join(
-                f"{list(r.left.items())}->{list(r.right.items())}×{cnt}"
+                f"{list(r.left.items())} -> {[(p.symbol, p.count) for p in r.productions]} ×{cnt}"
                 for r, cnt in apps
             ) if apps else ""
             rows.append({
@@ -363,6 +365,7 @@ def registrar_estadisticas(
     if csv_path:
         df.to_csv(csv_path, index=False)
     return df
+
 
 
 def merge_systems(*systems: SistemaP, global_id: str = "global", output_membrane: Optional[str] = None) -> SistemaP:
