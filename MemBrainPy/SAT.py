@@ -239,14 +239,17 @@ from typing import List, Dict, Tuple
 from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
 from .SAT import ExpresionBooleana, Variable, Negacion, Conjuncion, Disyuncion
 
-def generar_sistema_por_estructura(
-    expr: ExpresionBooleana,
-    output_membrane: str = "M_root"
-) -> SistemaP:
+import itertools
+from typing import List, Dict, Tuple
+from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
+from .SAT import ExpresionBooleana, Variable, Negacion, Conjuncion, Disyuncion
+
+
+def generar_sistema_por_estructura(expr: ExpresionBooleana) -> SistemaP:
     """
-    Genera un P-sistema en el que cada membrana de asignación contiene
-    la codificación completa de la expresión booleana expr en forma de reglas
-    y simula su evaluación bajo esa asignación.
+    Genera un P-sistema en el que la membrana raíz "M_root" contiene
+    las membranas de asignación, cada una codificando completamente la
+    expresión booleana expr para evaluar satisfacibilidad.
     """
     # 1. Recorrer el árbol de la expresión para asignar IDs a nodos
     node_children: Dict[str, Tuple[str, ...]] = {}
@@ -283,51 +286,47 @@ def generar_sistema_por_estructura(
     # Construir nodos y determinar root_id
     root_id = build(expr)
 
-    # 2. Crear sistema y membrana raíz
+    # 2. Crear sistema y membrana raíz fija "M_root"
     sistema = SistemaP()
-    root_mem = Membrana(id_mem=output_membrane, resources={})
+    root_mem = Membrana(id_mem="M_root", resources={})
     sistema.add_membrane(root_mem, parent_id=None)
-    sistema.output_membrane = output_membrane
+    sistema.output_membrane = "M_root"
 
     # 3. Extraer variables únicas y ordenadas
     variables = sorted({v for v in node_var.values()})
     n = len(variables)
 
-    # 4. Por cada asignación booleana, crear membrana y reglas de evaluación
+    # 4. Para cada asignación booleana, crear membrana y reglas de evaluación
     for bits in itertools.product([False, True], repeat=n):
         assign_id = f"assign_{''.join('1' if b else '0' for b in bits)}"
-        # recursos iniciales de la asignación
+        # Recursos iniciales: var_T o var_F
         res = {f"{var}_{'T' if val else 'F'}": 1 for var, val in zip(variables, bits)}
         mem = Membrana(id_mem=assign_id, resources=res)
-        sistema.add_membrane(mem, parent_id=output_membrane)
+        sistema.add_membrane(mem, parent_id="M_root")
 
-        # 4.1. Reglas de variables -> generan nodo_T o nodo_F
+        # 4.1. Variables: generan nodo_T o nodo_F
         for nid, typ in node_type.items():
             if typ == 'var':
                 var = node_var[nid]
-                # true
                 mem.add_regla(Regla(
                     left={f"{var}_T": 1},
                     productions=[Production(symbol=f"{nid}_T", count=1)],
                     priority=1
                 ))
-                # false
                 mem.add_regla(Regla(
                     left={f"{var}_F": 1},
                     productions=[Production(symbol=f"{nid}_F", count=1)]
                 ))
 
-        # 4.2. Reglas de operadores
+        # 4.2. Operadores: not, and, or
         for nid, typ in node_type.items():
             children = node_children[nid]
             if typ == 'not':
                 c = children[0]
-                # si child es true -> result false
                 mem.add_regla(Regla(
                     left={f"{c}_T": 1},
                     productions=[Production(symbol=f"{nid}_F", count=1)]
                 ))
-                # si child es false -> result true
                 mem.add_regla(Regla(
                     left={f"{c}_F": 1},
                     productions=[Production(symbol=f"{nid}_T", count=1)],
@@ -335,13 +334,11 @@ def generar_sistema_por_estructura(
                 ))
             elif typ == 'and':
                 c1, c2 = children
-                # ambos true -> true
                 mem.add_regla(Regla(
                     left={f"{c1}_T": 1, f"{c2}_T": 1},
                     productions=[Production(symbol=f"{nid}_T", count=1)],
                     priority=1
                 ))
-                # cualquiera false -> false
                 mem.add_regla(Regla(
                     left={f"{c1}_F": 1},
                     productions=[Production(symbol=f"{nid}_F", count=1)]
@@ -352,7 +349,6 @@ def generar_sistema_por_estructura(
                 ))
             elif typ == 'or':
                 c1, c2 = children
-                # cualquiera true -> true
                 mem.add_regla(Regla(
                     left={f"{c1}_T": 1},
                     productions=[Production(symbol=f"{nid}_T", count=1)],
@@ -363,25 +359,24 @@ def generar_sistema_por_estructura(
                     productions=[Production(symbol=f"{nid}_T", count=1)],
                     priority=1
                 ))
-                # ambos false -> false
                 mem.add_regla(Regla(
                     left={f"{c1}_F": 1, f"{c2}_F": 1},
                     productions=[Production(symbol=f"{nid}_F", count=1)]
                 ))
 
-        # 4.3. Regla final: si root es true, emite sat
+        # 4.3. Regla final: si root es true → SAT; si root es false → X
         mem.add_regla(Regla(
             left={f"{root_id}_T": 1},
-            productions=[Production(symbol="sat", count=1, direction=Direction.OUT)],
+            productions=[Production(symbol="SAT", count=1, direction=Direction.OUT)],
             priority=2
         ))
-        # opcional: si root es false, emite unsat
         mem.add_regla(Regla(
             left={f"{root_id}_F": 1},
-            productions=[Production(symbol="unsat", count=1, direction=Direction.OUT)]
+            productions=[Production(symbol="X", count=1, direction=Direction.OUT)]
         ))
 
     return sistema
+
 
 
 
