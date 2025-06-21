@@ -205,7 +205,7 @@ def simular_lapso(
     to_create:    List[Tuple[str, str, Dict[str,int], List[Regla]]] = []
     to_dissolve:  List[str] = []
     division_dissolved: Set[str] = set()
-    seleccionados: Dict[str, List[Tuple[Regla, int]]] = {}
+    seleccionados: Dict[str, List[Tuple[Regla, int]]] = {}  # DICT, no lista
 
     # — Fase 1: Selección y Consumo —
     for mem in list(sistema.skin.values()):
@@ -246,30 +246,36 @@ def simular_lapso(
                     consumo_total = multiset_times(regla.left, cnt)
                     recursos_disp = sub_multiset(recursos_disp, consumo_total)
 
-                    # — Producción tipada según regla.productions —
-                    for prod in regla.productions:
+                    # — PRODUCCIONES: normalizamos regla.productions —
+                    prod_defs = regla.productions
+                    if isinstance(prod_defs, dict):
+                        prod_defs = [
+                            Production(symbol=sym, count=cuenta, direction=Direction.OUT)
+                            for sym, cuenta in prod_defs.items()
+                        ]
+
+                    for prod in prod_defs:
                         total = prod.count * cnt
                         if prod.direction == Direction.NORMAL:
-                            m = producciones[mem.id_mem]
-                            m[prod.symbol] = m.get(prod.symbol, 0) + total
-
+                            dst = producciones[mem.id_mem]
                         elif prod.direction == Direction.IN and prod.target:
-                            m2 = producciones.setdefault(prod.target, {})
-                            m2[prod.symbol] = m2.get(prod.symbol, 0) + total
-
-                        elif prod.direction == Direction.OUT:
-                            padre = mem.parent
-                            if padre:
-                                m0 = producciones.setdefault(padre, {})
-                                m0[prod.symbol] = m0.get(prod.symbol, 0) + total
+                            dst = producciones.setdefault(prod.target, {})
+                        elif prod.direction == Direction.OUT and mem.parent:
+                            dst = producciones.setdefault(mem.parent, {})
+                        else:
+                            continue
+                        dst[prod.symbol] = dst.get(prod.symbol, 0) + total
 
                     # — Creación de membranas —
                     for _ in range(cnt):
-                        for proto_label, init_res in regla.create_membranes:
-                            new_id   = f"{mem.id_mem}_{proto_label}_{uuid.uuid4().hex[:8]}"
-                            res_copy = deepcopy(init_res)
-                            prot     = sistema.prototypes.get(proto_label)
-                            rules_list = [] if prot is None else [deepcopy(rp) for rp in prot.reglas]
+                        for cm in regla.create_membranes:
+                            # solo usamos los dos primeros elementos de la tupla
+                            proto_label = cm[0]
+                            init_res    = cm[1]
+                            new_id      = f"{mem.id_mem}_{proto_label}_{uuid.uuid4().hex[:8]}"
+                            res_copy    = deepcopy(init_res)
+                            prot        = sistema.prototypes.get(proto_label)
+                            rules_list  = [] if prot is None else [deepcopy(rp) for rp in prot.reglas]
                             to_create.append((mem.id_mem, new_id, res_copy, rules_list))
 
         consumos[mem.id_mem] = recursos_disp
@@ -292,7 +298,7 @@ def simular_lapso(
             padre = sistema.skin[padre_id]
             if dis_id not in division_dissolved:
                 padre.resources = add_multiset(padre.resources, sistema.skin[dis_id].resources)
-            for hijo_id in sistema.skin[dis_id].children:
+            for hijo_id in list(sistema.skin[dis_id].children):
                 sistema.skin[hijo_id].parent = padre_id
                 padre.children.append(hijo_id)
             padre.children.remove(dis_id)
@@ -326,6 +332,9 @@ def simular_lapso(
 
 
 
+
+
+
 # ---------------------- REGISTRAR ESTADÍSTICAS MÚLTIPLES -----------------------
 
 def registrar_estadisticas(
@@ -343,14 +352,37 @@ def registrar_estadisticas(
     for idx_l, lapso in enumerate(all_results, start=1):
         cre_str = ";".join(f"{p}->{c}" for p, c in lapso.created) if lapso.created else ""
         dis_str = ";".join(lapso.dissolved) if lapso.dissolved else ""
+
         for mem_id in lapso.consumos:
             rec_rest = lapso.consumos.get(mem_id, {})
-            prod = lapso.producciones.get(mem_id, {})
-            apps = lapso.seleccionados.get(mem_id, [])
-            apps_str = ";".join(
-                f"{list(r.left.items())} -> {[(p.symbol, p.count) for p in r.productions]} ×{cnt}"
-                for r, cnt in apps
-            ) if apps else ""
+            prod     = lapso.producciones.get(mem_id, {})
+            apps     = lapso.seleccionados.get(mem_id, [])
+
+            apps_entries: list[str] = []
+            for regla, cnt in apps:
+                # Normalizar producciones de la regla
+                prod_defs = regla.productions
+
+                if isinstance(prod_defs, dict):
+                    # legacy: dict de símbolo->cantidad
+                    prod_list = list(prod_defs.items())
+                elif isinstance(prod_defs, list):
+                    prod_list = []
+                    for p in prod_defs:
+                        if hasattr(p, "symbol") and hasattr(p, "count"):
+                            prod_list.append((p.symbol, p.count))
+                        else:
+                            # tupla u otro tipo
+                            prod_list.append(p)
+                else:
+                    prod_list = [prod_defs]
+
+                apps_entries.append(
+                    f"{list(regla.left.items())} -> {prod_list} ×{cnt}"
+                )
+
+            apps_str = ";".join(apps_entries) if apps_entries else ""
+
             rows.append({
                 "lapso": idx_l,
                 "membrana": mem_id,
@@ -365,6 +397,8 @@ def registrar_estadisticas(
     if csv_path:
         df.to_csv(csv_path, index=False)
     return df
+
+
 
 
 
