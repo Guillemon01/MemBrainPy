@@ -15,7 +15,13 @@ from copy import deepcopy
 from typing import List, Dict, Optional
 
 from .SistemaP import SistemaP, Membrana, Regla, simular_lapso
-
+from .SistemaP import (
+    SistemaP,
+    Membrana,
+    Regla,
+    Production,
+    Direction
+)
 # ----------------------------------------------------------------------
 # 1. AST para expresiones booleanas
 # ----------------------------------------------------------------------
@@ -228,122 +234,174 @@ def configurar_expresion_booleana() -> Optional[ExpresionBooleana]:
 # 4. Generación de P-sistema SAT jerárquico
 # ----------------------------------------------------------------------
 
+import itertools
+from typing import List, Dict, Tuple
+from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
+from .SAT import ExpresionBooleana, Variable, Negacion, Conjuncion, Disyuncion
+
 def generar_sistema_por_estructura(
     expr: ExpresionBooleana,
     output_membrane: str = "M_root"
 ) -> SistemaP:
-    sistema = SistemaP()
+    """
+    Genera un P-sistema en el que cada membrana de asignación contiene
+    la codificación completa de la expresión booleana expr en forma de reglas
+    y simula su evaluación bajo esa asignación.
+    """
+    # 1. Recorrer el árbol de la expresión para asignar IDs a nodos
+    node_children: Dict[str, Tuple[str, ...]] = {}
+    node_type: Dict[str, str] = {}
+    node_var: Dict[str, str] = {}
+    counter = {"i": 0}
 
-    # 1) Raíz con token de arranque
-    raiz = Membrana(
-        id_mem=output_membrane,
-        resources={f"go_{output_membrane}": 1}
-    )
-    sistema.add_membrane(raiz, None)
+    def build(node: ExpresionBooleana) -> str:
+        i = counter["i"]
+        nid = f"n{i}"
+        counter["i"] += 1
+        if isinstance(node, Variable):
+            node_type[nid] = 'var'
+            node_var[nid] = node.nombre
+            node_children[nid] = ()
+        elif isinstance(node, Negacion):
+            child = build(node.operando)
+            node_type[nid] = 'not'
+            node_children[nid] = (child,)
+        elif isinstance(node, Conjuncion):
+            left = build(node.left)
+            right = build(node.right)
+            node_type[nid] = 'and'
+            node_children[nid] = (left, right)
+        elif isinstance(node, Disyuncion):
+            left = build(node.left)
+            right = build(node.right)
+            node_type[nid] = 'or'
+            node_children[nid] = (left, right)
+        else:
+            raise ValueError(f"Nodo desconocido: {node}")
+        return nid
+
+    # Construir nodos y determinar root_id
+    root_id = build(expr)
+
+    # 2. Crear sistema y membrana raíz
+    sistema = SistemaP()
+    root_mem = Membrana(id_mem=output_membrane, resources={})
+    sistema.add_membrane(root_mem, parent_id=None)
     sistema.output_membrane = output_membrane
 
-    cont = {"VAR":0, "AND":0, "OR":0}
-    protos: Dict[str, Membrana] = {}
+    # 3. Extraer variables únicas y ordenadas
+    variables = sorted({v for v in node_var.values()})
+    n = len(variables)
 
-    def build(nodo) -> str:
-        # nombres legibles para cada tipo de nodo
-        if isinstance(nodo, Variable):
-            key = f"VAR_{nodo.nombre}"
-        elif isinstance(nodo, Conjuncion):
-            cont["AND"] += 1
-            key = f"AND_{cont['AND']}"
-        else:  # Disyuncion
-            cont["OR"] += 1
-            key = f"OR_{cont['OR']}"
+    # 4. Por cada asignación booleana, crear membrana y reglas de evaluación
+    for bits in itertools.product([False, True], repeat=n):
+        assign_id = f"assign_{''.join('1' if b else '0' for b in bits)}"
+        # recursos iniciales de la asignación
+        res = {f"{var}_{'T' if val else 'F'}": 1 for var, val in zip(variables, bits)}
+        mem = Membrana(id_mem=assign_id, resources=res)
+        sistema.add_membrane(mem, parent_id=output_membrane)
 
-        if key in protos:
-            return key
-
-        proto = Membrana(id_mem=key, resources={})
-        go = f"go_{key}"
-
-        if isinstance(nodo, Variable):
-            # división variable → T/F
-            proto.reglas.append(Regla(
-                left={go:1}, right={}, priority=1,
-                division=(
-                    {f"{key}_T":1},
-                    {f"{key}_F":1}
-                )
-            ))
-        else:
-            # construir hijos
-            L = build(nodo.left)
-            R = build(nodo.right)
-            proto.reglas.append(Regla(
-                left={go:1}, right={}, priority=1,
-                create_membranes=[
-                    (L, {f"go_{L}":1}),
-                    (R, {f"go_{R}":1})
-                ]
-            ))
-            # poda/evaluación local
-            if isinstance(nodo, Conjuncion):
-                proto.reglas.append(Regla(
-                    left={f"{L}_F":1}, right={f"{key}_F":1}, priority=0
+        # 4.1. Reglas de variables -> generan nodo_T o nodo_F
+        for nid, typ in node_type.items():
+            if typ == 'var':
+                var = node_var[nid]
+                # true
+                mem.add_regla(Regla(
+                    left={f"{var}_T": 1},
+                    productions=[Production(symbol=f"{nid}_T", count=1)],
+                    priority=1
                 ))
-                proto.reglas.append(Regla(
-                    left={f"{R}_F":1}, right={f"{key}_F":1}, priority=0
-                ))
-                proto.reglas.append(Regla(
-                    left={f"{L}_T":1, f"{R}_T":1},
-                    right={f"{key}_T":1}, priority=-1
-                ))
-            else:
-                proto.reglas.append(Regla(
-                    left={f"{L}_T":1}, right={f"{key}_T":1}, priority=0
-                ))
-                proto.reglas.append(Regla(
-                    left={f"{R}_T":1}, right={f"{key}_T":1}, priority=0
-                ))
-                proto.reglas.append(Regla(
-                    left={f"{L}_F":1, f"{R}_F":1},
-                    right={f"{key}_F":1}, priority=-1
+                # false
+                mem.add_regla(Regla(
+                    left={f"{var}_F": 1},
+                    productions=[Production(symbol=f"{nid}_F", count=1)]
                 ))
 
-        sistema.register_prototype(proto)
-        protos[key] = proto
-        return key
+        # 4.2. Reglas de operadores
+        for nid, typ in node_type.items():
+            children = node_children[nid]
+            if typ == 'not':
+                c = children[0]
+                # si child es true -> result false
+                mem.add_regla(Regla(
+                    left={f"{c}_T": 1},
+                    productions=[Production(symbol=f"{nid}_F", count=1)]
+                ))
+                # si child es false -> result true
+                mem.add_regla(Regla(
+                    left={f"{c}_F": 1},
+                    productions=[Production(symbol=f"{nid}_T", count=1)],
+                    priority=1
+                ))
+            elif typ == 'and':
+                c1, c2 = children
+                # ambos true -> true
+                mem.add_regla(Regla(
+                    left={f"{c1}_T": 1, f"{c2}_T": 1},
+                    productions=[Production(symbol=f"{nid}_T", count=1)],
+                    priority=1
+                ))
+                # cualquiera false -> false
+                mem.add_regla(Regla(
+                    left={f"{c1}_F": 1},
+                    productions=[Production(symbol=f"{nid}_F", count=1)]
+                ))
+                mem.add_regla(Regla(
+                    left={f"{c2}_F": 1},
+                    productions=[Production(symbol=f"{nid}_F", count=1)]
+                ))
+            elif typ == 'or':
+                c1, c2 = children
+                # cualquiera true -> true
+                mem.add_regla(Regla(
+                    left={f"{c1}_T": 1},
+                    productions=[Production(symbol=f"{nid}_T", count=1)],
+                    priority=1
+                ))
+                mem.add_regla(Regla(
+                    left={f"{c2}_T": 1},
+                    productions=[Production(symbol=f"{nid}_T", count=1)],
+                    priority=1
+                ))
+                # ambos false -> false
+                mem.add_regla(Regla(
+                    left={f"{c1}_F": 1, f"{c2}_F": 1},
+                    productions=[Production(symbol=f"{nid}_F", count=1)]
+                ))
 
-    # 2) Montar toda la jerarquía
-    root_key = build(expr)
-    raiz.reglas.append(Regla(
-        left={f"go_{output_membrane}":1}, right={}, priority=1,
-        create_membranes=[(root_key, {f"go_{root_key}":1})]
-    ))
-
-    # 3) Reglas en la raíz que reconocen el resultado movido desde el hijo
-    raiz.reglas.append(Regla(
-        left={f"{root_key}_T":1}, right={"sat":1}, priority=0
-    ))
-    raiz.reglas.append(Regla(
-        left={f"{root_key}_F":1}, right={"unsat":1}, priority=0
-    ))
+        # 4.3. Regla final: si root es true, emite sat
+        mem.add_regla(Regla(
+            left={f"{root_id}_T": 1},
+            productions=[Production(symbol="sat", count=1, direction=Direction.OUT)],
+            priority=2
+        ))
+        # opcional: si root es false, emite unsat
+        mem.add_regla(Regla(
+            left={f"{root_id}_F": 1},
+            productions=[Production(symbol="unsat", count=1, direction=Direction.OUT)]
+        ))
 
     return sistema
+
+
+
 
 
 def resolver_satisfaccion(
     expr: ExpresionBooleana,
     max_pasos: int = 20
 ) -> bool:
+    """
+    Simula el sistema generado por generar_sistema_por_estructura,
+    y devuelve True si la membrana de salida contiene 'sat'.
+    """
     sistema = generar_sistema_por_estructura(expr)
     copia   = deepcopy(sistema)
-    root_id = copia.output_membrane
-
     for _ in range(max_pasos):
         simular_lapso(copia)
-        res = copia.skin[root_id].resources
-        if res.get("sat", 0) > 0:
+        if "sat" in copia.skin[copia.output_membrane].resources:
             return True
-        if res.get("unsat", 0) > 0:
-            return False
-
+    # Si no se decide tras max_pasos, lo damos por insat.
     return False
 
 # ----------------------------------------------------------------------
