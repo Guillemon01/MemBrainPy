@@ -1,6 +1,7 @@
 README.md
 setup.py
 MemBrainPy/Lector.py
+MemBrainPy/SAT.py
 MemBrainPy/SistemaP.py
 MemBrainPy/__init__.py
 MemBrainPy/configurador.py
