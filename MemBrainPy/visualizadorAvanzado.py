@@ -28,20 +28,43 @@ from .SistemaP import (
 
 def _format_productions(r: Regla) -> str:
     """
-    Formatea la lista tipada r.productions para mostrar
-    'A', 'B:2', 'C_in(X)', 'D_out', etc.
+    Formatea la lista de producciones r.productions para mostrar:
+    - objetos Production: 'A', 'B:2', 'C_in(X)', 'D_out'
+    - tuplas legacy (symbol, count)
+    - cadenas simples
     """
     partes: List[str] = []
     for p in r.productions:
-        # Símbolo y cantidad
-        sym = p.symbol if p.count == 1 else f"{p.symbol}:{p.count}"
-        # Dirección
-        if p.direction == Direction.IN and p.target:
-            sym += f"_in({p.target})"
-        elif p.direction == Direction.OUT:
+        # Caso Production
+        if isinstance(p, Production):
+            symbol = p.symbol
+            count  = p.count
+            direction = p.direction
+            target = p.target
+        # Caso tupla legacy (symbol, count)
+        elif isinstance(p, tuple) and len(p) >= 2:
+            symbol, count = p[0], p[1]
+            direction = Direction.NORMAL
+            target = None
+        # Caso cadena simple
+        elif isinstance(p, str):
+            partes.append(p)
+            continue
+        else:
+            # Ignorar cualquier otro tipo inesperado
+            continue
+
+        # Construir cadena base
+        sym = symbol if count == 1 else f"{symbol}:{count}"
+        # Añadir sufijos de dirección
+        if direction == Direction.IN and target:
+            sym += f"_in({target})"
+        elif direction == Direction.OUT:
             sym += "_out"
         partes.append(sym)
+
     return ",".join(partes)
+
 
 
 def dibujar_membrana(
@@ -163,7 +186,7 @@ def simular_y_visualizar(
                 fontsize=10,
                 bbox=dict(facecolor="white", alpha=0.8, boxstyle="round")
             )
-        texto_candidatos = "Maximales generados:"
+        texto_candidatos = "Maximales generados:\n"
         estado_actual = historial[i]
         for m in estado_actual.skin.values():
             rec_disp = deepcopy(m.resources)
@@ -179,7 +202,7 @@ def simular_y_visualizar(
                         ridx = m.reglas.index(regla) + 1
                         elems += [f"r{ridx}"] * veces
                     rep.append("{" + ",".join(elems) + "}")
-                texto_candidatos += f" {m.id_mem}: " + ",".join(rep)
+                texto_candidatos += f"{m.id_mem}: " + ",".join(rep) + "\n"
         ax.text(
             0.02, 0.02, texto_candidatos,
             transform=ax.transAxes, fontsize=8,
@@ -215,6 +238,7 @@ def simular_y_visualizar(
     fig.canvas.mpl_connect("key_press_event", on_key)
     dibujar_estado(0)
     plt.show(block=True)
+
 
 
 # Alias para facilitar uso directo desde el paquete

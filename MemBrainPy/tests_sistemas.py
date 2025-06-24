@@ -22,7 +22,7 @@ def sistema_basico(recursos: dict = None, num_reglas: int = None) -> SistemaP:
     return sistema
 
 
-def sistema_aniado(recursos: dict = None, num_membranas: int = None, anidacion_max: int = None) -> SistemaP:
+def sistema_anidado(recursos: dict = None, num_membranas: int = None, anidacion_max: int = None) -> SistemaP:
     """
     Crea un sistema P con membranas anidadas.
     Ahora también puede generar reglas que disuelven membranas hijas.
