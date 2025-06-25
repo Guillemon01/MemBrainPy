@@ -3,8 +3,7 @@
 def main() {
     /* Estructura: 
        - “1” (piel) con una hija “2”
-       - “2” tiene como hija la membrana “3”
-    */
+       - “2” tiene como hija la membrana “3” */
     @mu = [[[]'3]'2]'1;
 
     /* Recursos iniciales */
@@ -16,10 +15,9 @@ def main() {
        - En “1”: cada “m” se comunica hacia afuera (out)
        - En “2”: cooperativa (n p -> q)
        - En “3”: comunica “p” de regreso a “1” (in 1)
-       - También en “2”: produce “r” a partir de “q”
-    */
-    [m --> m (out)] '1;
-    [n p --> q] '2;
-    [p --> p (in 1)] '3;
-    [q --> r] '2;
+       - También en “2”: produce “r” a partir de “q” */
+    [m --> m (out)] '1';
+    [n p --> q] '2';
+    [p --> p (in 1)] '3';
+    [q --> r] '2';
 }

@@ -9,6 +9,6 @@ def main() {
     @ms(2) = c*2;
 
     /* Reglas en 1 y en 2 */
-    [a b --> d] '1;
-    [c --> c (out)] '2;
+    [a b --> d] '1';
+    [c --> c (out)] '2';
 }

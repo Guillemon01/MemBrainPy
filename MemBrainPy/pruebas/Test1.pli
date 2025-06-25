@@ -16,24 +16,24 @@ def main() {
 
     /* Reglas de evolución */
     /* - Reescritura en membrana 1 */
-    [a --> b] '1;
+    [a --> b] '1';
 
     /* - Regla cooperativa en membrana 2 */
-    [b c --> d] '2;
+    [b c --> d] '2';
     /* - División en membrana 2 */
-    [c --> c c] '2;
+    [c --> c c] '2';
 
     /* - Comunicación: e sale de 3 al exterior (piel) */
-    [e --> e (out)] '3;
+    [e --> e (out)] '3';
     /* - Comunicación: d va de 2 a 4 */
-    [d --> d (in 4)] '2;
+    [d --> d (in 4)] '2';
 
     /* - División en membrana 3 */
-    [e --> e e] '3;
+    [e --> e e] '3';
 
     /* - Reescritura en membrana 4 */
-    [f --> f g] '4;
+    [f --> f g] '4';
 
     /* - Reescritura cooperativa en membrana 5 */
-    [g h --> i] '5;
+    [g h --> i] '5';
 }

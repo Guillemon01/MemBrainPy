@@ -9,7 +9,7 @@ long_descr = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="MemBrainPy",
-    version="0.2.0",
+    version="0.2.1",
     author="Guillermo Sanchis Terol",
     author_email="guillesanchisterol@gmail.com",
     description="Librería para realizar computación con membranas",

@@ -3,8 +3,7 @@
 def main() {
     /* Estructura: 
        - “1” (piel) con dos hijas: “2” y “3”
-       - “2” a su vez tiene como hija a “4”
-    */
+       - “2” a su vez tiene como hija a “4” */
     @mu = [[[]'4]'2[]'3]'1;
 
     /* Recursos iniciales en cada membrana */
@@ -17,10 +16,9 @@ def main() {
        - En “1”: reescritura cooperativa con PRIORIDAD 2
        - En “2”: comunicación “in” hacia “4”
        - En “3”: cooperativa sin comas (dos “w” → “t”)
-       - En “4”: duplicación (u → u u) sin sufijos
-    */
-    [x y --> v :2] '1;
-    [z --> z (in 4)] '2;
-    [w w --> t] '3;
-    [u --> u u] '4;
+       - En “4”: duplicación (u → u u) sin sufijos */
+    [x y --> v :2] '1';
+    [z --> z (in 4)] '2';
+    [w w --> t] '3';
+    [u --> u u] '4';
 }

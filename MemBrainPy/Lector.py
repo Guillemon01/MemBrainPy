@@ -149,46 +149,35 @@ def leer_sistema(path: str) -> SistemaP:
       1) @mu = <estructura>;          // define membranas y anidamiento
       2) @ms(<id>) = <multiconjunto>;  // recursos iniciales
       3) [L --> R(: prioridad)?]'id';   // reglas asociadas a membrana <id>
-
-    También ignora encabezados como "@model<…>" y bloque "def main() { … }".
-
-    Args:
-        path: ruta al archivo .pli.
-
-    Retorna:
-        SistemaP con membranas, recursos y reglas cargados.
-
-    Lanza:
-        ValueError si falta alguna sección o hay sintaxis incorrecta.
     """
+    # imports necesarios para construir Production
+    from .SistemaP import SistemaP, Membrana, Regla, Production, Direction
+
     with open(path, 'r', encoding='utf-8') as f:
         raw = f.read()
 
     # 1) Eliminar comentarios /* ... */
     raw = re.sub(r'/\*[\s\S]*?\*/', '', raw)
 
-    # 2) Si existe "def main() { ... }", extraer contenido interior
+    # 2) Extraer bloque main si existe
     main_block = re.search(r'def\s+main\s*\(\)\s*\{([\s\S]*)\}', raw)
     text = main_block.group(1) if main_block else raw
 
-    # ===== Parsear sección @mu =====
+    # ===== Parsear @mu =====
     mu_match = re.search(r'@mu\s*=\s*(.+?);', text)
     if not mu_match:
         raise ValueError("No se encontró la definición @mu en el archivo .pli")
-    mu_str = mu_match.group(1).strip()
-    structure = parse_structure(mu_str)
+    structure = parse_structure(mu_match.group(1).strip())
 
-    sistema = SistemaP(output_membrane=None)
-    # Crear membranas con recursos vacíos inicialmente
+    sistema = SistemaP()
     for mem_id, parent_id in structure:
         membrana = Membrana(id_mem=mem_id, resources={})
         sistema.add_membrane(membrana, parent_id)
 
-    # ===== Parsear recursos @ms(id) =====
+    # ===== Parsear @ms(id) =====
     ms_pat = re.compile(r'@ms\s*\(\s*(\w+)\s*\)\s*=\s*(.+?);')
     for m in ms_pat.finditer(text):
-        mem_id = m.group(1).strip()
-        ms_str = m.group(2).strip()
+        mem_id, ms_str = m.group(1).strip(), m.group(2).strip()
         recursos = parse_multiset(ms_str)
         if mem_id not in sistema.skin:
             raise ValueError(f"Membrana '{mem_id}' en @ms no definida en @mu")
@@ -199,7 +188,19 @@ def leer_sistema(path: str) -> SistemaP:
     for mem_id, izquierda, derecha, prioridad in reglas_parsed:
         if mem_id not in sistema.skin:
             raise ValueError(f"Regla asignada a membrana desconocida '{mem_id}'")
-        regla = Regla(left=izquierda, right=derecha, priority=prioridad)
+        # Construir lista de Production a partir de 'derecha'
+        productions: List[Production] = []
+        for simb_full, cnt in derecha.items():
+            if simb_full.endswith('_out'):
+                sym = simb_full[:-4]
+                productions.append(Production(symbol=sym, count=cnt, direction=Direction.OUT))
+            elif '_in_' in simb_full:
+                sym, tgt = simb_full.split('_in_', 1)
+                productions.append(Production(symbol=sym, count=cnt, direction=Direction.IN, target=tgt))
+            else:
+                productions.append(Production(symbol=simb_full, count=cnt, direction=Direction.NORMAL))
+        # Crear la regla con el campo 'productions' correcto
+        regla = Regla(left=izquierda, productions=productions, priority=prioridad)
         sistema.skin[mem_id].add_regla(regla)
 
     return sistema
